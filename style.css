@@ -1,0 +1,26 @@
+/* Main Stuff */
+
+body {
+  background-color: darkgray;
+  display: flexbox;
+}
+
+
+/* Text stuff */
+
+a, p, h1, h2, h3, h4, h5, li {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Header */
+
+
+/* Main content */
+
+#chatbox-div {
+  align-items: center;
+  text-align: center;
+
+}
+
+/* Footer */
