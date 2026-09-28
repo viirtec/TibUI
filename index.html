@@ -1,32 +1,126 @@
-<!DOCTYPE html>
-<html>
-
+<!doctype html>
+<html lang="en" data-theme="system">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TibUI - Fast Local AI client</title>
-  <link rel="stylesheet" href="style.css" type="text/css" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f6f3">
+  <meta name="description" content="A tiny frontend for local and OpenAI-compatible AI APIs.">
+  <title>TibUI</title>
+  <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
-  <header>
-    <div>
-      <h3>TibUI</h3>
-    </div>
-  </header>
-  <main>
-    <section>
-      <div id="chatbox-div">
-        <h3>Chat</h3>
-        <input type="text" name="Prompt input" id="prompt-input" value="" />
-        <button type="submit">Send</button>
+  <div class="app">
+    <aside id="sidebar" aria-label="Chat history">
+      <div class="brand-line">
+        <a class="brand" href="./">TibUI</a>
+        <button class="icon-button mobile-only" id="close-menu" type="button" aria-label="Close menu">&#215;</button>
       </div>
-    </section>
-  </main>
-  
-  <footer>
-    
-  </footer>
-</body>
+      <button class="new-chat" id="new-chat" type="button"><span aria-hidden="true">+</span> New chat</button>
+      <p class="section-label">Chats</p>
+      <div id="chat-list" class="chat-list"></div>
+      <div class="side-bottom">
+        <p id="privacy-label" class="privacy"><span></span> Private session — not saved</p>
+        <button class="side-button" id="settings-button" type="button">Settings</button>
+      </div>
+    </aside>
+    <div id="scrim" class="scrim" aria-hidden="true"></div>
 
+    <main>
+      <header class="topbar">
+        <button class="icon-button menu-button" id="menu-button" type="button" aria-label="Open menu">&#9776;</button>
+        <div class="selectors">
+          <label class="sr-only" for="provider">Provider</label>
+          <select id="provider">
+            <option value="chat">ch.at</option>
+            <option value="pollinations">Pollinations</option>
+            <option value="horde">Stable Horde images</option>
+            <option value="ollama">Ollama</option>
+            <option value="custom">OpenAI compatible</option>
+          </select>
+          <span aria-hidden="true">/</span>
+          <label class="sr-only" for="model">Model</label>
+          <select id="model"></select>
+        </div>
+        <button class="icon-button settings-top" id="settings-top" type="button" aria-label="Open settings">&#9881;</button>
+      </header>
+
+      <section id="conversation" class="conversation" aria-live="polite">
+        <div id="welcome" class="welcome">
+          <div class="mark" aria-hidden="true">T</div>
+          <h1>How can I help?</h1>
+          <p>A small interface for local and compatible AI APIs.</p>
+          <p id="provider-note" class="provider-note"></p>
+        </div>
+        <div id="messages" class="messages"></div>
+      </section>
+
+      <div class="composer-area">
+        <p id="request-status" class="request-status" role="status"></p>
+        <form id="prompt-form" class="composer">
+          <label class="sr-only" for="prompt-input">Message</label>
+          <textarea id="prompt-input" rows="1" maxlength="16000" placeholder="Message TibUI" enterkeyhint="send"></textarea>
+          <button id="send-button" class="send" type="submit" aria-label="Send">&#8593;</button>
+        </form>
+        <p class="fine-print">Your selected provider receives the messages or image prompts you send.</p>
+      </div>
+    </main>
+  </div>
+
+  <div id="settings-modal" class="modal" hidden>
+    <section class="settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <header>
+        <div><h2 id="settings-title">Settings</h2><p>Simple, local browser preferences.</p></div>
+        <button class="icon-button" id="close-settings" type="button" aria-label="Close settings">&#215;</button>
+      </header>
+      <div class="settings-body">
+        <fieldset>
+          <legend>Appearance</legend>
+          <div class="field-line"><label for="theme">Theme</label><select id="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
+        </fieldset>
+        <fieldset>
+          <legend>Privacy</legend>
+          <label class="check-line" for="save-chats"><span><strong>Save chats in a cookie</strong><small>Off by default. Cookie space is limited, so old chats may be removed.</small></span><input id="save-chats" type="checkbox"></label>
+          <button id="clear-data" class="link-button" type="button">Clear saved data</button>
+        </fieldset>
+        <fieldset>
+          <legend>Connection</legend>
+          <p id="provider-summary" class="summary"></p>
+          <div class="provider-settings" data-provider="chat">
+            <p><strong>GPT-4o via ch.at</strong></p><p>No credential is required.</p>
+          </div>
+          <div class="provider-settings" data-provider="pollinations" hidden>
+            <p><strong>Pollinations anonymous text API</strong></p><p>Uses the legacy keyless endpoint and its live free-model list.</p>
+            <button id="load-pollinations" class="secondary" type="button">Refresh models</button>
+          </div>
+          <div class="provider-settings" data-provider="horde" hidden>
+            <p><strong>Stable Horde / AI Horde</strong></p><p>Uses the official anonymous key. Jobs run on volunteer workers and may wait in a queue.</p>
+            <label class="check-line compact-check" for="horde-safety"><span><strong>Safety filtering</strong><small>Hide adult-focused models and ask Horde to censor detected adult output.</small></span><input id="horde-safety" type="checkbox" checked></label>
+            <p id="horde-model-info" class="model-info">Loading live worker information…</p>
+            <button id="load-horde" class="secondary" type="button">Refresh image models</button>
+          </div>
+          <div class="provider-settings" data-provider="ollama" hidden>
+            <label for="ollama-url">Ollama URL</label><input id="ollama-url" type="url" value="http://localhost:11434" spellcheck="false" autocapitalize="none">
+            <label for="ollama-model">Model</label>
+            <div class="inline"><input id="ollama-model" type="text" value="llama3.2" list="ollama-models" spellcheck="false" autocapitalize="none"><button id="load-ollama" class="secondary" type="button">Load models</button></div>
+            <datalist id="ollama-models"></datalist>
+            <small>If TibUI is on another origin, allow it with <code>OLLAMA_ORIGINS</code>.</small>
+          </div>
+          <div class="provider-settings" data-provider="custom" hidden>
+            <label for="custom-url">API base URL</label><input id="custom-url" type="url" value="https://api.openai.com/v1" spellcheck="false" autocapitalize="none">
+            <label for="custom-model">Model</label><input id="custom-model" type="text" value="gpt-4o-mini" spellcheck="false" autocapitalize="none">
+            <label for="custom-key">API key (optional)</label><input id="custom-key" type="password" autocomplete="off" placeholder="Kept in memory only">
+            <small>The API must allow browser requests (CORS). Keys are never saved.</small>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Chat</legend>
+          <label for="system-prompt">System prompt (optional)</label><textarea id="system-prompt" rows="3" maxlength="2000"></textarea>
+        </fieldset>
+      </div>
+      <footer><span id="settings-status" role="status"></span><button id="done-settings" class="primary" type="button">Done</button></footer>
+    </section>
+  </div>
+  <noscript>TibUI needs JavaScript to connect to an AI provider.</noscript>
+  <script src="app.js"></script>
+</body>
 </html>
