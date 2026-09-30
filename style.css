@@ -239,3 +239,101 @@ textarea {
   }
 }
 
+.message-content {
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.message-content p {
+  margin: 0 0 1rem;
+}
+
+.message-content h1,
+.message-content h2,
+.message-content h3 {
+  line-height: 1.25;
+  margin: 1rem 0 0.5rem;
+}
+
+.message-content ul {
+  margin: 0.5rem 0 1rem;
+  padding-left: 1.5rem;
+}
+
+.message-content blockquote {
+  border-left: 3px solid #6875f5;
+  margin: 1rem 0;
+  padding-left: 1rem;
+  opacity: 0.85;
+}
+
+.message-content a {
+  color: #6875f5;
+  text-decoration: underline;
+}
+
+.inline-code {
+  background: rgba(127, 127, 127, 0.18);
+  border-radius: 4px;
+  font-family: monospace;
+  padding: 2px 5px;
+}
+
+.code-block {
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  margin: 1rem 0;
+  overflow: hidden;
+}
+
+.code-block-header {
+  align-items: center;
+  background: #1f2937;
+  color: #d1d5db;
+  display: flex;
+  font-family: monospace;
+  font-size: 12px;
+  justify-content: space-between;
+  padding: 8px 12px;
+}
+
+.code-block pre {
+  margin: 0;
+  overflow-x: auto;
+  padding: 14px;
+}
+
+.code-block code {
+  color: #e5e7eb;
+  font-family: Consolas, Monaco, monospace;
+  font-size: 14px;
+  white-space: pre;
+}
+
+.message-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.copy-message-button,
+.copy-code-button {
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.copy-message-button:hover,
+.copy-code-button:hover {
+  background: rgba(127, 127, 127, 0.15);
+}
+
+.copy-code-button {
+  color: #d1d5db;
+}
+
