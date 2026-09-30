@@ -5,12 +5,12 @@ TibUI is a tiny, dependency-free frontend for AI APIs. It is plain HTML, CSS, an
 ## Providers
 
 - **ch.at** — credential-less chat shown as `GPT-4o`
-- **Pollinations** — the legacy keyless text endpoint, with its anonymous model list loaded at runtime
+- **Pollinations** — using the Pollinations legacy keyless text endpoint, with its anonymous model list loaded at runtime
 - **Stable Horde / AI Horde** — keyless image generation on volunteer workers, with selectable live models, worker/ETA figures, and optional safety filtering
 - **Ollama** — local or network Ollama through `/api/chat`
 - **OpenAI compatible** — a configurable Chat Completions base URL, model, and optional bearer key
 
-Free services and model availability can change independently of TibUI. Pollinations' newer unified generation API requires authentication; TibUI uses its currently available legacy anonymous endpoint for the keyless option. Stable Horde uses AI Horde's official anonymous key and therefore receives the lowest queue priority.
+Pollinations' newer unified generation API requires authentication; TibUI uses its currently available legacy anonymous endpoint for the keyless option. Stable Horde uses AI Horde's official anonymous key and therefore receives the lowest queue priority.
 
 ## Run locally
 
@@ -39,3 +39,9 @@ The client has no framework, dependencies, modules, build tools, streaming APIs,
 ## Static hosting
 
 Upload `index.html`, `style.css`, and `app.js` together. No backend, database, package installation, or build command is required.
+
+## Limitations
+
+- Free services and model availability (external public APIs, local hosting not affected) can change as TibUI is an frontend client for AI APIs and cannot run models in the user's browser.
+
+- Public models have limited knowledge and no live web search. Public keyless AI API providers don't have web search enabled for models and have models with knowledge cutoff from between 2023 and 2025
