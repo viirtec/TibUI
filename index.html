@@ -63,8 +63,12 @@
           <textarea id="prompt-input" rows="1" maxlength="16000" placeholder="Message TibUI" enterkeyhint="send"></textarea>
           <button id="send-button" class="send" type="submit" aria-label="Send">&#8593;</button>
           <label>
-            <input type="checkbox" id="chat-web-search-enabled">
-            Web search for this chat
+            <label class="web-search-toggle" for="chat-web-search-enabled">
+              <input type="checkbox" id="chat-web-search-enabled">
+              <span aria-hidden="true">⌕</span>
+              <span>Web search</span>
+            </label>
+            
           </label>
           
         </form>
@@ -131,23 +135,58 @@
         </fieldset>
         <fieldset>
           <legend>Chat</legend>
-          <label for="system-prompt">System prompt (optional)</label><textarea id="system-prompt" rows="3" maxlength="2000"></textarea>
-          <label>
+          
+          <label for="system-prompt">
+            System prompt (optional)
+          </label>
+          
+          <textarea id="system-prompt" rows="3" maxlength="2000"></textarea>
+          
+          <label class="check-line" for="web-search-enabled">
+            <span>
+              <strong>Enable web search</strong>
+              <small>
+                Web search is used only when this setting and the
+                chat Web search switch are both enabled.
+              </small>
+            </span>
+            
             <input type="checkbox" id="web-search-enabled">
-            Enable web search
           </label>
           
-          <label>
-            Search queries per request:
-            <input type="number" id="web-search-query-count" min="1" max="10" value="3">
+          <label for="web-search-query-count">
+            Search queries per request
           </label>
           
-          <label>
+          <input type="number" id="web-search-query-count" min="1" max="10" value="3">
+          
+          <small class="settings-help">
+            The selected AI model generates this many different
+            search queries before SearXNG is contacted.
+          </small>
+          
+          <label for="web-search-results-count">
+            Results per search query
+          </label>
+          
+          <input type="number" id="web-search-results-count" min="1" max="10" value="5">
+          
+          <small class="settings-help">
+            Maximum number of SearXNG results kept from each query.
+          </small>
+          
+          <label for="web-search-instances">
             Custom SearXNG instances
-            <textarea id="web-search-instances" placeholder="https://your-searxng.example&#10;https://another-instance.example"></textarea>
           </label>
           
+          <textarea id="web-search-instances" rows="4" spellcheck="false" autocapitalize="none" placeholder="https://your-searxng.example&#10;https://another-searxng.example"></textarea>
+          
+          <small class="settings-help">
+            One instance URL per line. Public instances from the
+            SearXNG public-instance directory are also used automatically.
+          </small>
         </fieldset>
+        
       </div>
       <footer><span id="settings-status" role="status"></span><button id="done-settings" class="primary" type="button">Done</button></footer>
     </section>
@@ -155,8 +194,6 @@
   <noscript>TibUI needs JavaScript to connect to an AI provider.</noscript>
   <script src="app.js">
     </script
-  <script src="websearch.js">
-  </script>
 </body>
 
 </html>
