@@ -58,22 +58,28 @@
       
       <div class="composer-area">
         <p id="request-status" class="request-status" role="status"></p>
+        
         <form id="prompt-form" class="composer">
           <label class="sr-only" for="prompt-input">Message</label>
+          
           <textarea id="prompt-input" rows="1" maxlength="16000" placeholder="Message TibUI" enterkeyhint="send"></textarea>
-          <button id="send-button" class="send" type="submit" aria-label="Send">&#8593;</button>
-          <label>
+          
+          <div class="composer-actions">
             <label class="web-search-toggle" for="chat-web-search-enabled">
               <input type="checkbox" id="chat-web-search-enabled">
-              <span aria-hidden="true">⌕</span>
-              <span>Web search</span>
+              <span class="web-search-icon" aria-hidden="true">⌕</span>
+              <span class="web-search-label">Web search</span>
             </label>
             
-          </label>
-          
+            <button id="send-button" class="send" type="submit" aria-label="Send">&#8593;</button>
+          </div>
         </form>
-        <p class="fine-print">Your selected provider receives the messages or image prompts you send.</p>
+        
+        <p class="fine-print">
+          Your selected provider receives the messages or image prompts you send.
+        </p>
       </div>
+      
     </main>
   </div>
   
@@ -192,8 +198,7 @@
     </section>
   </div>
   <noscript>TibUI needs JavaScript to connect to an AI provider.</noscript>
-  <script src="app.js">
-    </script
+  <script src="app.js"></script>
 </body>
 
 </html>
