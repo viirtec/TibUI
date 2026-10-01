@@ -34,13 +34,7 @@
    * The public directory is maintained separately from TibUI.
    */
   var PUBLIC_SEARXNG_FALLBACK = [
-    "https://priv.au",
-    "https://baresearch.org",
-    "https://etsi.me",
-    "https://searx.mbuf.net",
-    "https://sx.catgirl.cloud",
-    "https://grep.vim.wtf",
-    "https://searxng.cups.moe"
+    "https://searx.perennialte.ch"
   ];
   
   var SEARXNG_DIRECTORY =
