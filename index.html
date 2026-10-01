@@ -29,7 +29,7 @@
     
     <main>
       <header class="topbar">
-        <button class="icon-button menu-button" id="menu-button" type="button" aria-label="Open menu">&#9776;</button>
+        <button class="icon-button menu-button" id="menu-button" type="button" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">&#9776;</button>
         <div class="selectors">
           <label class="sr-only" for="provider">Provider</label>
           <select id="provider">
@@ -46,14 +46,14 @@
         <button class="icon-button settings-top" id="settings-top" type="button" aria-label="Open settings">&#9881;</button>
       </header>
       
-      <section id="conversation" class="conversation" aria-live="polite">
+      <section id="conversation" class="conversation" aria-label="Conversation" aria-busy="false">
         <div id="welcome" class="welcome">
           <div class="mark" aria-hidden="true">T</div>
           <h1>How can I help?</h1>
           <p>A small interface for local and compatible AI APIs.</p>
           <p id="provider-note" class="provider-note"></p>
         </div>
-        <div id="messages" class="messages"></div>
+        <div id="messages" class="messages" role="log" aria-live="polite" aria-relevant="additions"></div>
       </section>
       
       <div class="composer-area">
@@ -62,11 +62,11 @@
         <form id="prompt-form" class="composer">
           <label class="sr-only" for="prompt-input">Message</label>
           
-          <textarea id="prompt-input" rows="1" maxlength="16000" placeholder="Message TibUI" enterkeyhint="send"></textarea>
+          <textarea id="prompt-input" rows="1" maxlength="16000" autocomplete="off" autocapitalize="sentences" placeholder="Message TibUI" enterkeyhint="send"></textarea>
           
           <div class="composer-actions">
             <label class="web-search-toggle" for="chat-web-search-enabled">
-              <input type="checkbox" id="chat-web-search-enabled">
+              <input type="checkbox" id="chat-web-search-enabled" aria-describedby="web-search-help">
               <span class="web-search-icon" aria-hidden="true">⌕</span>
               <span class="web-search-label">Web search</span>
             </label>
@@ -152,8 +152,8 @@
             <span>
               <strong>Enable web search</strong>
               <small>
-                Web search is used only when this setting and the
-                chat Web search switch are both enabled.
+                Search before answering. This setting and the composer
+                switch control the same preference. Search queries are sent to your search endpoint.
               </small>
             </span>
             
@@ -167,8 +167,8 @@
           <input type="number" id="web-search-query-count" min="1" max="10" value="3">
           
           <small class="settings-help">
-            The selected AI model generates this many different
-            search queries before SearXNG is contacted.
+            Maximum number of queries planned by the selected AI model.
+            If planning fails, your message is used as one search query.
           </small>
           
           <label for="web-search-results-count">
@@ -178,18 +178,20 @@
           <input type="number" id="web-search-results-count" min="1" max="10" value="5">
           
           <small class="settings-help">
-            Maximum number of SearXNG results kept from each query.
+            Maximum results kept from each query; up to 12 unique sources per answer.
           </small>
           
           <label for="web-search-instances">
-            Custom SearXNG instances
+            SearXNG endpoints
           </label>
           
-          <textarea id="web-search-instances" rows="4" spellcheck="false" autocapitalize="none" placeholder="https://your-searxng.example&#10;https://another-searxng.example"></textarea>
+          <textarea id="web-search-instances" rows="4" spellcheck="false" autocapitalize="none" placeholder="https://your-searxng.example&#10;/searxng" aria-describedby="web-search-help"></textarea>
           
-          <small class="settings-help">
-            One instance URL per line. Public instances from the
-            SearXNG public-instance directory are also used automatically.
+          <small class="settings-help" id="web-search-help">
+            One base URL or same-origin proxy path per line. The endpoint must
+            allow JSON results and browser access (CORS for another origin).
+            Configured endpoints are tried in order. With none configured,
+            up to three public endpoints are tried; they may block API access.
           </small>
         </fieldset>
         
