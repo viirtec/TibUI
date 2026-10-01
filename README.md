@@ -12,7 +12,8 @@ TibUI is a small, self-hostable AI frontend made from static HTML, CSS, and Java
 - Local Ollama model discovery and generation controls
 - Optional SearXNG web search using a same-origin relay or a direct browser connection
 - Anonymous sessions by default, with opt-in cookie chat storage
-- Light, dark, and system themes
+- Deletable chat-history entries
+- Dark mode by default with a top-bar light/dark switch and a system-theme option
 - Compatibility presets and a maximum-compatibility mode
 - Model-company logos stored locally with no logo requests to third parties
 - Responsive layouts for 320 px phones, tablets, and desktop displays
@@ -132,7 +133,6 @@ These endpoints were checked on 2026-10-01. Public instance behavior changes, so
 
 | Endpoint                            | JSON | Browser CORS | Observed result                                                              |
 | ----------------------------------- | ---- | ------------ | ---------------------------------------------------------------------------- |
-| `https://sx.xo.st`                  | Yes  | No           | Returned valid general search results; suitable behind a relay               |
 | `https://severian-searxng.hf.space` | Yes  | Yes          | Browser-readable, but its upstream engines often returned no general results |
 
 The public SearXNG directory had no instance that simultaneously demonstrated dependable general results, JSON output, and browser CORS during the audit. Self-hosting with a same-origin relay is the reliable setup.

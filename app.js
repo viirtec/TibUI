@@ -8,7 +8,7 @@
     chats: [],
     activeId: "",
     provider: "chat",
-    theme: "system",
+    theme: "dark",
     saveChats: false,
     systemPrompt: "",
     pollinationsModel: "openai-fast",
@@ -34,10 +34,7 @@
     webSearchEnabled: false,
     webSearchMode: "auto",
     webSearchRelay: "/searxng",
-    webSearchInstances: [
-      "https://sx.xo.st",
-      "https://severian-searxng.hf.space",
-    ],
+    webSearchInstances: ["https://severian-searxng.hf.space"],
     webSearchResultsCount: 5,
     compatPreset: "maximum",
     maxCompatibility: true,
@@ -129,6 +126,8 @@
     var raw = cookieValue(COOKIE_NAME) || cookieValue("tibui_state_v1");
     var saved;
     var key;
+    var cleanInstances;
+    var i;
     if (!raw) {
       return;
     }
@@ -149,6 +148,13 @@
       if (!Array.isArray(state.webSearchInstances)) {
         state.webSearchInstances = [];
       }
+      cleanInstances = [];
+      for (i = 0; i < state.webSearchInstances.length; i += 1) {
+        if (stripSlash(state.webSearchInstances[i]) !== "https://sx.xo.st") {
+          cleanInstances.push(state.webSearchInstances[i]);
+        }
+      }
+      state.webSearchInstances = cleanInstances;
     } catch (ignore) {
       state.chats = [];
     }
@@ -230,9 +236,13 @@
     var i;
     var chat;
     var button;
+    var entry;
+    var remove;
     list.innerHTML = "";
     for (i = state.chats.length - 1; i >= 0; i -= 1) {
       chat = state.chats[i];
+      entry = document.createElement("div");
+      entry.className = "chat-entry";
       button = document.createElement("button");
       button.type = "button";
       button.className =
@@ -240,7 +250,17 @@
       button.textContent = chat.title || "New chat";
       button.setAttribute("data-chat-id", chat.id);
       button.onclick = selectChat;
-      list.appendChild(button);
+      remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "delete-chat";
+      remove.setAttribute("data-chat-id", chat.id);
+      remove.setAttribute("aria-label", "Delete " + (chat.title || "chat"));
+      remove.title = "Delete chat";
+      remove.innerHTML = "&#215;";
+      remove.onclick = deleteChat;
+      entry.appendChild(button);
+      entry.appendChild(remove);
+      list.appendChild(entry);
     }
   }
 
@@ -250,6 +270,33 @@
     renderChats();
     renderMessages();
     closeMenu();
+  }
+
+  function deleteChat(event) {
+    var id = event.currentTarget.getAttribute("data-chat-id");
+    var index = -1;
+    var i;
+    event.preventDefault();
+    event.stopPropagation();
+    for (i = 0; i < state.chats.length; i += 1) {
+      if (state.chats[i].id === id) {
+        index = i;
+        break;
+      }
+    }
+    if (index < 0) {
+      return;
+    }
+    state.chats.splice(index, 1);
+    if (!state.chats.length) {
+      state.chats.push({ id: makeId(), title: "New chat", messages: [] });
+    }
+    if (state.activeId === id) {
+      state.activeId = state.chats[Math.min(index, state.chats.length - 1)].id;
+    }
+    saveState();
+    renderChats();
+    renderMessages();
   }
 
   function escapeHtml(value) {
@@ -537,12 +584,12 @@
       row.className = "message " + message.role;
       bubble = document.createElement("div");
       bubble.className = "bubble" + (message.error ? " message-error" : "");
-      if (message.role === "assistant") {
-        label = document.createElement("div");
-        label.className = "message-label";
-        label.textContent = message.label || providerLabel(state.provider);
-        bubble.appendChild(label);
-      }
+      label = document.createElement("div");
+      label.className = "message-label";
+      label.textContent =
+        message.role === "user"
+          ? "You"
+          : message.label || providerLabel(state.provider);
       if (message.kind === "image") {
         image = document.createElement("img");
         image.className = "generated-image";
@@ -553,6 +600,7 @@
         renderText(bubble, message.content);
       }
       appendSources(bubble, message.sources);
+      row.appendChild(label);
       row.appendChild(bubble);
       list.appendChild(row);
     }
@@ -1645,8 +1693,26 @@
   }
 
   function applyTheme() {
+    var isDark;
+    var themeColor = document.querySelector('meta[name="theme-color"]');
     document.documentElement.setAttribute("data-theme", state.theme);
     byId("theme").value = state.theme;
+    isDark =
+      state.theme === "dark" ||
+      (state.theme === "system" &&
+        window.matchMedia &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches);
+    byId("theme-toggle").innerHTML = isDark ? "&#9728;" : "&#9790;";
+    byId("theme-toggle").setAttribute(
+      "aria-label",
+      isDark ? "Switch to light mode" : "Switch to dark mode"
+    );
+    byId("theme-toggle").title = isDark
+      ? "Switch to light mode"
+      : "Switch to dark mode";
+    if (themeColor) {
+      themeColor.setAttribute("content", isDark ? "#171815" : "#f6f6f3");
+    }
   }
 
   function applyCompatibility() {
@@ -1915,6 +1981,16 @@
     byId("scrim").onclick = closeMenu;
     byId("settings-button").onclick = openSettings;
     byId("settings-top").onclick = openSettings;
+    byId("theme-toggle").onclick = function () {
+      var currentDark =
+        state.theme === "dark" ||
+        (state.theme === "system" &&
+          window.matchMedia &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches);
+      state.theme = currentDark ? "light" : "dark";
+      applyTheme();
+      saveState();
+    };
     byId("close-settings").onclick = function () {
       closeSettings(false);
     };

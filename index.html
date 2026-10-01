@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="en" data-theme="system">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#f6f6f3" />
+    <meta name="theme-color" content="#171815" />
     <meta
       name="description"
       content="TibUI is a lightweight, private frontend for local and compatible AI APIs."
@@ -65,14 +65,25 @@
             <option value="ollama">Ollama</option>
             <option value="custom">OpenAI compatible</option>
           </select>
-          <button
-            class="icon-button settings-top"
-            id="settings-top"
-            type="button"
-            aria-label="Open settings"
-          >
-            &#9881;
-          </button>
+          <div class="top-actions">
+            <button
+              class="icon-button theme-toggle"
+              id="theme-toggle"
+              type="button"
+              aria-label="Switch to light mode"
+              title="Switch to light mode"
+            >
+              &#9728;
+            </button>
+            <button
+              class="icon-button settings-top"
+              id="settings-top"
+              type="button"
+              aria-label="Open settings"
+            >
+              &#9881;
+            </button>
+          </div>
         </header>
 
         <section
@@ -98,14 +109,6 @@
 
         <div class="composer-area">
           <p id="request-status" class="request-status" role="status"></p>
-          <div class="model-bar">
-            <span id="model-logo" class="model-logo" aria-hidden="true"
-              ><span>T</span></span
-            >
-            <label for="model">Model</label>
-            <select id="model"></select>
-            <span id="model-meta" class="model-meta"></span>
-          </div>
           <form id="prompt-form" class="composer">
             <label class="sr-only" for="prompt-input">Message</label>
             <textarea
@@ -200,6 +203,14 @@
               </div>
             </section>
             <div class="composer-actions">
+              <div class="model-bar">
+                <span id="model-logo" class="model-logo" aria-hidden="true"
+                  ><span>T</span></span
+                >
+                <label class="sr-only" for="model">Model</label>
+                <select id="model"></select>
+                <span id="model-meta" class="model-meta"></span>
+              </div>
               <label class="web-search-toggle" for="chat-web-search-enabled">
                 <input type="checkbox" id="chat-web-search-enabled" />
                 <span aria-hidden="true">⌕</span>
@@ -463,7 +474,7 @@
           </fieldset>
 
           <fieldset>
-            <legend>Chat & web search</legend>
+            <legend>Chat &amp; web search</legend>
             <label for="system-prompt">System prompt (optional)</label>
             <textarea id="system-prompt" rows="3" maxlength="2000"></textarea>
             <label class="check-line" for="web-search-enabled"
@@ -520,7 +531,7 @@
           </fieldset>
 
           <fieldset>
-            <legend>Compatibility & performance</legend>
+            <legend>Compatibility &amp; performance</legend>
             <label class="check-line" for="show-model-logos"
               ><span
                 ><strong>Show model company logos</strong
