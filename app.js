@@ -36,9 +36,12 @@
    *
    * The public directory is maintained separately from TibUI.
    */
+  var PRIMARY_SEARXNG = "https://searx.perennialte.ch";
+  
   var PUBLIC_SEARXNG_FALLBACK = [
-    "https://searx.perennialte.ch"
+    PRIMARY_SEARXNG
   ];
+  
   
   var SEARXNG_DIRECTORY =
     "https://searx.space/data/instances.json";
@@ -1076,7 +1079,13 @@
         )
       );
     
-    state.webSearchInstances = searchInstances;
+    state.webSearchInstances =
+      uniqueStrings(
+        [PRIMARY_SEARXNG].concat(
+          searchInstances
+        )
+      );
+    
     
     
     state.hordeSafety =
@@ -1266,18 +1275,27 @@
     xhr.ontimeout = function() {
       done(
         new Error(
-          "The provider took too long to respond."
+          "SearXNG request timed out after " +
+          (
+            options &&
+            options.timeout ?
+            options.timeout :
+            120000
+          ) +
+          "ms."
         )
       );
     };
     
+    
     xhr.onerror = function() {
       done(
         new Error(
-          "Network error. Check the provider URL and its CORS configuration."
+          "Browser network/CORS error. The endpoint may be unreachable, may block browser requests, or may not allow your site's Origin."
         )
       );
     };
+    
     
     xhr.onabort = function() {
       done(
@@ -1301,6 +1319,21 @@
     }
     
     return xhr;
+  }
+  
+  function ensurePrimarySearXNG() {
+    var configured =
+      Array.isArray(
+        state.webSearchInstances
+      ) ?
+      state.webSearchInstances : [];
+    
+    state.webSearchInstances =
+      uniqueStrings(
+        [PRIMARY_SEARXNG].concat(
+          configured
+        )
+      );
   }
   
   
@@ -1342,6 +1375,20 @@
     return result;
   }
   
+  function getConfiguredSearXNGInstances() {
+    var configured = Array.isArray(state.webSearchInstances) ?
+      state.webSearchInstances : [];
+    
+    configured = parseCustomSearXNGInstances(
+      configured.join("\n")
+    );
+    
+    
+    return uniqueStrings(
+      [PRIMARY_SEARXNG].concat(configured)
+    );
+  }
+  
   
   
   function loadPublicSearXNGInstances(controller, callback) {
@@ -1361,7 +1408,12 @@
         
         if (!error && instances) {
           for (key in instances) {
-            if (!Object.prototype.hasOwnProperty.call(instances, key)) {
+            if (
+              !Object.prototype.hasOwnProperty.call(
+                instances,
+                key
+              )
+            ) {
               continue;
             }
             
@@ -1377,20 +1429,28 @@
                 !item.timing.search ||
                 !item.timing.search.error)
             ) {
-              result.push(key.replace(/\/+$/, ""));
+              result.push(
+                key.replace(/\/+$/, "")
+              );
             }
           }
         }
+        
+        
         
         callback(
           null,
           uniqueStrings(
             PUBLIC_SEARXNG_FALLBACK.concat(result)
-          ).slice(0, 3)
+          ).slice(0, 10)
         );
-      }, { timeout: 5000 }
+      },
+      {
+        timeout: 5000
+      }
     );
   }
+  
   
   
   function extractJsonObject(text) {
@@ -1557,7 +1617,7 @@
     controller.xhr = sendProviderMessages(provider, buildSearchPlannerMessages(prompt), function(error, content) {
       var queries;
       if (controller.stopped) { return; }
-      // Smaller models may return prose or refuse JSON. Search still has a useful query.
+      
       try { queries = error ? [] : parseSearchQueries(content); } catch (parseError) { queries = []; }
       if (!queries.length) { queries = [trim(prompt).slice(0, 300)]; }
       callback(null, queries.slice(0, state.webSearchQueryCount));
@@ -1626,43 +1686,83 @@
     controller,
     callback
   ) {
-    var url =
-      instance.replace(/\/+$/, "") +
+    var url;
+    
+    instance =
+      String(instance || "")
+      .replace(/\/+$/, "");
+    
+    if (!instance) {
+      callback(
+        new Error(
+          "SearXNG endpoint is empty."
+        ),
+        []
+      );
+      
+      return;
+    }
+    
+    url =
+      instance +
       "/search?q=" +
       encodeURIComponent(query) +
       "&format=json" +
       "&safesearch=1" +
       "&pageno=1";
     
+    controller.stage =
+      "Searching " +
+      instance;
+    
+    el("request-status").textContent =
+      controller.stage;
+    
     controller.xhr =
       requestJson(
         "GET",
         url,
-        null, {},
-        function(error, data) {
+        null,
+        {
+          "Accept": "application/json"
+        },
+        function(
+          error,
+          data
+        ) {
           var results = [];
           var i;
           var item;
           
-          if (controller.stopped) {
+          if (
+            controller.stopped
+          ) {
             return;
           }
           
           if (error) {
             callback(
-              error,
+              new Error(
+                instance +
+                " → " +
+                error.message
+              ),
               []
             );
+            
             return;
           }
           
           if (
             !data ||
-            !Array.isArray(data.results)
+            !Array.isArray(
+              data.results
+            )
           ) {
             callback(
               new Error(
-                "SearXNG returned no JSON results."
+                instance +
+                " → SearXNG returned an invalid JSON response: missing results[]"
               ),
               []
             );
@@ -1680,14 +1780,17 @@
               );
             
             if (item) {
-              results.push(item);
+              results.push(
+                item
+              );
             }
           }
           
           if (!results.length) {
             callback(
               new Error(
-                "SearXNG returned no usable results."
+                instance +
+                " → SearXNG returned no usable results."
               ),
               []
             );
@@ -1699,43 +1802,137 @@
             null,
             results
           );
-        }, { timeout: 10000 }
+        },
+        {
+          timeout: 10000
+        }
       );
   }
   
   
   
-  function searchOneQuery(query, instances, failedInstances, controller, callback) {
+  
+  function searchOneQuery(
+    query,
+    instances,
+    failedInstances,
+    controller,
+    callback
+  ) {
     var index = 0;
     var attempts = 0;
-    var lastError;
+    var lastError = null;
+    var maxAttempts;
+    
+    
+    maxAttempts = Math.max(
+      1,
+      Math.min(
+        instances.length,
+        10
+      )
+    );
     
     function next() {
       var instance;
-      if (controller.stopped || controller.complete) { return; }
-      while (index < instances.length && failedInstances[instances[index]]) { index += 1; }
-      if (index >= instances.length || attempts >= 3) {
-        callback(lastError || new Error("No reachable SearXNG JSON endpoint is available."), []);
+      
+      if (
+        controller.stopped ||
+        controller.complete
+      ) {
         return;
       }
+      
+      while (
+        index < instances.length &&
+        failedInstances[instances[index]]
+      ) {
+        index += 1;
+      }
+      
+      if (
+        index >= instances.length ||
+        attempts >= maxAttempts
+      ) {
+        if (lastError) {
+          callback(
+            new Error(
+              "All SearXNG endpoints failed for query \"" +
+              query +
+              "\". Last error: " +
+              lastError.message
+            ),
+            []
+          );
+        } else {
+          callback(
+            new Error(
+              "No SearXNG endpoints are configured."
+            ),
+            []
+          );
+        }
+        
+        return;
+      }
+      
       instance = instances[index];
       index += 1;
       attempts += 1;
-      controller.stage = "Searching: " + query;
-      el("request-status").textContent = controller.stage;
-      searchSearXNG(instance, query, state.webSearchResultsCount, controller, function(error, results) {
-        if (controller.stopped || controller.complete) { return; }
-        if (!error) { callback(null, results); return; }
-        lastError = error;
-        // An empty query result does not make an otherwise healthy instance unusable.
-        if (error.message !== "SearXNG returned no usable results.") {
-          failedInstances[instance] = true;
+      
+      controller.stage =
+        "Searching: " +
+        query +
+        " · " +
+        instance;
+      
+      el("request-status").textContent =
+        controller.stage;
+      
+      searchSearXNG(
+        instance,
+        query,
+        state.webSearchResultsCount,
+        controller,
+        function(error, results) {
+          if (
+            controller.stopped ||
+            controller.complete
+          ) {
+            return;
+          }
+          
+          if (!error) {
+            callback(
+              null,
+              results
+            );
+            return;
+          }
+          
+          
+          lastError = new Error(
+            instance +
+            ": " +
+            error.message
+          );
+          
+          
+          if (
+            error.message !==
+            "SearXNG returned no usable results."
+          ) {
+            failedInstances[instance] = true;
+          }
+          
+          next();
         }
-        next();
-      });
+      );
     }
+    
     next();
   }
+  
   
   function deduplicateSearchResults(
     results
@@ -1838,75 +2035,210 @@
   
   
   
-  function startWebSearch(prompt, provider, callback) {
-    var controller = { xhr: null, stopped: false, complete: false, stage: "", timer: null };
+  function startWebSearch(
+    prompt,
+    provider,
+    callback
+  ) {
+    var controller = {
+      xhr: null,
+      stopped: false,
+      complete: false,
+      stage: "",
+      timer: null
+    };
     
     function finish(error, data) {
-      if (controller.complete) { return; }
-      controller.complete = true;
-      window.clearTimeout(controller.timer);
-      callback(error, data);
-    }
-    controller.abort = function() {
-      if (controller.complete) { return; }
-      controller.stopped = true;
-      if (controller.xhr) { controller.xhr.abort(); }
-      finish(new Error("Request stopped."));
-    };
-    controller.timer = window.setTimeout(function() {
-      controller.stopped = true;
-      if (controller.xhr) { controller.xhr.abort(); }
-      finish(new Error("Web search timed out. Configure a reachable SearXNG endpoint in Settings → Web search."));
-    }, 60000);
-    
-    generateWebSearchQueries(prompt, provider, controller, function(error, queries) {
-      var configured = parseCustomSearXNGInstances(state.webSearchInstances.join("\n"));
-      var failed = Object.create(null);
-      var results = [];
-      var successfulQueries = [];
-      var lastError;
-      var index = 0;
-      if (controller.stopped || controller.complete) { return; }
+      if (controller.complete) {
+        return;
+      }
       
-      function run(instances) {
-        function next() {
-          var query;
-          if (controller.stopped || controller.complete) { return; }
-          if (index >= queries.length) {
-            results = deduplicateSearchResults(results).slice(0, 12);
-            if (!results.length) {
-              finish(new Error("Web search could not retrieve results. Configure a SearXNG endpoint with JSON enabled and CORS access, or a same-origin proxy path. " +
-                (lastError ? "Last error: " + lastError.message : "Public instances may block API access.")));
-            } else {
-              finish(null, { queries: successfulQueries, results: results });
-            }
-            return;
-          }
-          query = queries[index];
-          index += 1;
-          searchOneQuery(query, instances, failed, controller, function(searchError, found) {
-            if (controller.stopped || controller.complete) { return; }
-            if (searchError) { lastError = searchError; }
-            else {
-              results = results.concat(found);
-              successfulQueries.push(query);
-            }
-            next();
-          });
+      controller.complete = true;
+      
+      window.clearTimeout(
+        controller.timer
+      );
+      
+      callback(
+        error,
+        data
+      );
+    }
+    
+    controller.abort = function() {
+      if (controller.complete) {
+        return;
+      }
+      
+      controller.stopped = true;
+      
+      if (controller.xhr) {
+        controller.xhr.abort();
+      }
+      
+      finish(
+        new Error("Request stopped.")
+      );
+    };
+    
+    controller.timer = window.setTimeout(
+      function() {
+        controller.stopped = true;
+        
+        if (controller.xhr) {
+          controller.xhr.abort();
         }
-        next();
+        
+        finish(
+          new Error(
+            "Web search timed out. Configure a reachable SearXNG endpoint in Settings → Web search."
+          )
+        );
+      },
+      60000
+    );
+    
+    generateWebSearchQueries(
+      prompt,
+      provider,
+      controller,
+      function(error, queries) {
+        var configured;
+        var failed;
+        var results = [];
+        var successfulQueries = [];
+        var lastError = null;
+        var index = 0;
+        
+        if (
+          controller.stopped ||
+          controller.complete
+        ) {
+          return;
+        }
+        
+        if (error) {
+          finish(error);
+          return;
+        }
+        
+        if (
+          !Array.isArray(queries) ||
+          !queries.length
+        ) {
+          finish(
+            new Error(
+              "Web search did not produce any usable queries."
+            )
+          );
+          
+          return;
+        }
+        
+        
+        configured =
+          getConfiguredSearXNGInstances();
+        
+        failed =
+          Object.create(null);
+        
+        function run(instances) {
+          function next() {
+            var query;
+            
+            if (
+              controller.stopped ||
+              controller.complete
+            ) {
+              return;
+            }
+            
+            if (
+              index >= queries.length
+            ) {
+              results =
+                deduplicateSearchResults(
+                  results
+                ).slice(0, 12);
+              
+              if (!results.length) {
+                finish(
+                  new Error(
+                    "Web search could not retrieve results." +
+                    (
+                      lastError ?
+                      " Last error: " +
+                      lastError.message :
+                      " No SearXNG endpoint returned usable results."
+                    )
+                  )
+                );
+              } else {
+                finish(
+                  null,
+                  {
+                    queries: successfulQueries,
+                    results: results
+                  }
+                );
+              }
+              
+              return;
+            }
+            
+            query =
+              queries[index];
+            
+            index += 1;
+            
+            searchOneQuery(
+              query,
+              instances,
+              failed,
+              controller,
+              function(
+                searchError,
+                found
+              ) {
+                if (
+                  controller.stopped ||
+                  controller.complete
+                ) {
+                  return;
+                }
+                
+                if (searchError) {
+                  lastError =
+                    searchError;
+                } else {
+                  results =
+                    results.concat(
+                      found
+                    );
+                  
+                  successfulQueries.push(
+                    query
+                  );
+                }
+                
+                next();
+              }
+            );
+          }
+          
+          next();
+        }
+        
+        
+        run(configured);
+        
+        
       }
-      // User-configured endpoints are deterministic, and never leak queries to public fallbacks.
-      if (configured.length) { run(configured); }
-      else {
-        el("request-status").textContent = "Finding public search endpoints…";
-        loadPublicSearXNGInstances(controller, function(instanceError, instances) {
-          if (!controller.stopped && !controller.complete) { run(instances); }
-        });
-      }
-    });
+    );
+    
     return controller;
   }
+  
   
   
   function chatMessages(chat, webContext) {
@@ -3326,6 +3658,8 @@
   
   function init() {
     loadSavedState();
+    ensurePrimarySearXNG();
+    
     
     if (
       !Array.isArray(state.chats) ||
