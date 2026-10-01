@@ -13,6 +13,7 @@ TibUI is a small, self-hostable AI frontend made from static HTML, CSS, and Java
 - Optional SearXNG web search using a same-origin relay or a direct browser connection
 - Anonymous sessions by default, with opt-in cookie chat storage
 - Deletable chat-history entries
+- Empty chats are reused instead of filling history with duplicate blank entries
 - Dark mode by default with a top-bar light/dark switch and a system-theme option
 - Compatibility presets and a maximum-compatibility mode
 - Model-company logos stored locally with no logo requests to third parties
@@ -20,6 +21,8 @@ TibUI is a small, self-hostable AI frontend made from static HTML, CSS, and Java
 - Safe lightweight Markdown rendering for headings, lists, links, quotes, code, tasks, and tables
 
 ## Interface
+
+Provider, model, optional tools, and send controls share one compact toolbar below the message box. Web search is disabled by default and uses two separate controls: enable the experimental feature in Settings, then switch on the Web tool for each message that should use search.
 
 ![TibUI desktop interface](screenshots/tibui-v2-desktop.png)
 
@@ -53,7 +56,7 @@ Any static web server works. Upload `index.html`, `style.css`, `app.js`, and `ic
 
 Chat saving is off by default. Without it, chat history exists only in the current page session. When enabled, TibUI stores a size-limited set of recent chats and preferences in a first-party cookie. API keys are kept only in memory and are never written to that cookie.
 
-Messages and image prompts are sent directly from the browser to the selected provider. Web search queries are sent to the configured SearXNG route.
+Messages and image prompts are sent directly from the browser to the selected provider. Web search queries are sent to the configured SearXNG route only when experimental web search is available in Settings and the composer Web tool is active.
 
 ## Ollama
 
@@ -68,6 +71,8 @@ OLLAMA_ORIGINS="https://your-tibui.example" ollama serve
 An HTTPS TibUI page normally cannot call an HTTP Ollama endpoint because browsers block mixed content. Use both services locally over HTTP, expose Ollama securely, or proxy it behind the TibUI origin.
 
 ## Web search and local SearXNG
+
+Web search is experimental and off by default. Enable it under **Chat & experimental search** to reveal the Web tool beside the message box. The Web tool remains off until selected, so enabling the feature does not add search data to every request.
 
 SearXNG must have JSON output enabled:
 

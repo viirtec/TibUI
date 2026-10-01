@@ -259,25 +259,39 @@ main {
   position: relative;
   z-index: 5;
   display: flex;
-  flex: 0 0 calc(58px + env(safe-area-inset-top));
+  flex: 0 0 calc(50px + env(safe-area-inset-top));
   align-items: center;
   justify-content: center;
   min-width: 0;
-  padding: env(safe-area-inset-top) 108px 0;
+  padding: env(safe-area-inset-top) 96px 0;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
 }
+.topbar-title {
+  position: absolute;
+  left: 50%;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  transform: translateX(-50%);
+}
 .provider-select {
-  max-width: 250px;
-  min-height: 36px;
-  padding: 5px 30px 5px 10px;
-  border: 1px solid transparent;
-  background: var(--panel);
+  flex: 0 1 150px;
+  width: 150px;
+  min-width: 82px;
+  height: 36px;
+  margin-right: 6px;
+  padding: 4px 25px 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel-soft);
   color: var(--text);
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 700;
 }
 .provider-select:hover {
-  border-color: var(--line);
+  border-color: var(--accent);
 }
 .icon-button {
   display: inline-flex;
@@ -309,8 +323,8 @@ main {
 }
 .theme-toggle,
 .settings-top {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   font-size: 18px;
 }
 .conversation {
@@ -538,17 +552,23 @@ main {
 }
 .model-bar {
   display: flex;
-  flex: 0 1 auto;
+  flex: 0 1 340px;
   align-items: center;
   min-width: 0;
   margin-right: 6px;
+  height: 36px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel-soft);
   color: var(--muted);
   font-size: 12px;
 }
 .model-bar select {
+  flex: 0 1 auto;
   min-width: 0;
-  max-width: 210px;
-  height: 34px;
+  max-width: 190px;
+  height: 32px;
   padding: 2px 24px 2px 6px;
   border: 1px solid transparent;
   background: transparent;
@@ -556,8 +576,8 @@ main {
   font-size: 12px;
 }
 .model-bar select:hover {
-  border-color: var(--line);
-  background: var(--panel-soft);
+  border-color: transparent;
+  background: var(--hover);
 }
 .model-logo {
   display: inline-flex;
@@ -579,7 +599,9 @@ main {
   height: 15px;
 }
 .model-meta {
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 105px;
   margin-left: 5px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -725,20 +747,26 @@ main {
   align-items: center;
   width: 100%;
   min-width: 0;
-  margin-top: 3px;
+  min-height: 36px;
+  margin-top: 4px;
 }
 .web-search-toggle,
 .tool-button {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
-  min-height: 34px;
-  margin-right: 5px;
+  justify-content: center;
+  height: 36px;
+  margin-right: 6px;
   padding: 5px 9px;
   border: 1px solid transparent;
   border-radius: 999px;
   background: transparent;
   color: var(--muted);
   font-size: 12px;
+}
+.web-search-toggle {
+  border-color: var(--line);
 }
 .web-search-toggle:hover,
 .tool-button:hover {
@@ -771,9 +799,9 @@ main {
   color: var(--accent);
 }
 .send {
-  flex: 0 0 40px;
-  width: 40px;
-  height: 40px;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border: 0;
   border-radius: 9px;
@@ -1130,13 +1158,9 @@ summary {
     display: inline-flex;
   }
   .topbar {
-    flex-basis: calc(58px + env(safe-area-inset-top));
+    flex-basis: calc(50px + env(safe-area-inset-top));
     padding-right: 88px;
     padding-left: 50px;
-  }
-  .provider-select {
-    max-width: calc(100vw - 176px);
-    width: 100%;
   }
   .menu-button {
     left: 7px;
@@ -1208,14 +1232,27 @@ summary {
   .welcome p {
     font-size: 13px;
   }
+  .provider-select {
+    flex-basis: 104px;
+    width: 104px;
+    min-width: 74px;
+    margin-right: 4px;
+    padding-right: 20px;
+    padding-left: 7px;
+  }
   .model-bar {
-    flex: 1 1 auto;
-    max-width: 170px;
+    flex: 10 1 auto;
+    max-width: 142px;
+    margin-right: 4px;
+    padding-right: 2px;
+    padding-left: 3px;
   }
   .model-bar select {
     flex: 1 1 auto;
     width: 0;
-    max-width: 140px;
+    max-width: 108px;
+    padding-right: 17px;
+    padding-left: 3px;
   }
   .composer {
     padding: 9px 8px 7px 12px;
@@ -1236,16 +1273,15 @@ summary {
   .image-control-last .image-check {
     display: flex;
   }
-  .web-search-toggle span:last-child {
-    display: none;
-  }
   .web-search-toggle {
-    width: 36px;
+    width: 42px;
+    margin-right: 4px;
     padding: 4px;
-    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
   }
   .web-search-toggle span:first-of-type {
-    margin: 0;
+    display: none;
   }
   .settings-body {
     padding-right: 11px;
@@ -1290,10 +1326,6 @@ summary {
   .menu-button {
     margin-right: 2px;
   }
-  .provider-select {
-    max-width: calc(100vw - 160px);
-    padding-right: 22px;
-  }
   .theme-toggle,
   .settings-top {
     width: 36px;
@@ -1306,11 +1338,20 @@ summary {
     padding-right: 5px;
     padding-left: 5px;
   }
+  .provider-select {
+    flex-basis: 92px;
+    width: 92px;
+    min-width: 68px;
+    padding-right: 17px;
+    font-size: 11px;
+  }
   .model-bar {
-    max-width: 145px;
+    max-width: 112px;
   }
   .model-bar select {
-    max-width: 112px;
+    max-width: 82px;
+    padding-right: 12px;
+    font-size: 11px;
   }
   .tool-button {
     width: 34px;

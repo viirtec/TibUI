@@ -32,6 +32,7 @@
     customModel: "gpt-4o-mini",
     showModelLogos: true,
     webSearchEnabled: false,
+    webSearchToolActive: false,
     webSearchMode: "auto",
     webSearchRelay: "/searxng",
     webSearchInstances: ["https://severian-searxng.hf.space"],
@@ -211,6 +212,14 @@
   }
 
   function newChat() {
+    var current = activeChat();
+    if (current && (!current.messages || !current.messages.length)) {
+      renderChats();
+      renderMessages();
+      closeMenu();
+      byId("prompt-input").focus();
+      return;
+    }
     var chat = { id: makeId(), title: "New chat", messages: [] };
     state.chats.push(chat);
     state.activeId = chat.id;
@@ -889,13 +898,7 @@
     byId("provider-note").textContent = providerNote(state.provider);
     setImageControls(false);
     byId("image-controls-button").hidden = state.provider !== "hordeImage";
-    byId("chat-web-search-enabled").parentNode.hidden =
-      state.provider === "hordeImage";
-    byId("chat-web-search-enabled").disabled = state.provider === "hordeImage";
-    if (state.provider === "hordeImage") {
-      byId("chat-web-search-enabled").checked = false;
-      setClass(byId("chat-web-search-enabled").parentNode, "active", false);
-    }
+    updateWebToolUI();
     rebuildModelSelect();
     saveState();
     if (loadLive && state.provider === "hordeText" && !hordeTextModels.length) {
@@ -915,6 +918,18 @@
     ) {
       loadPollinationsModels();
     }
+  }
+
+  function updateWebToolUI() {
+    var input = byId("chat-web-search-enabled");
+    var available = state.webSearchEnabled && state.provider !== "hordeImage";
+    if (!available) {
+      state.webSearchToolActive = false;
+    }
+    input.parentNode.hidden = !available;
+    input.disabled = !available;
+    input.checked = available && state.webSearchToolActive;
+    setClass(input.parentNode, "active", input.checked);
   }
 
   function requestJson(method, url, body, headers) {
@@ -1625,6 +1640,7 @@
     setSending(true);
     useWeb =
       state.webSearchEnabled &&
+      state.webSearchToolActive &&
       byId("chat-web-search-enabled").checked &&
       state.provider !== "hordeImage";
     byId("request-status").textContent = useWeb
@@ -1800,6 +1816,9 @@
     state.customModel =
       byId("custom-model").value.replace(/^\s+|\s+$/g, "") || "gpt-4o-mini";
     state.webSearchEnabled = byId("web-search-enabled").checked;
+    if (!state.webSearchEnabled) {
+      state.webSearchToolActive = false;
+    }
     state.webSearchMode = byId("web-search-mode").value;
     state.webSearchRelay =
       stripSlash(byId("web-search-relay").value) || "/searxng";
@@ -1818,13 +1837,7 @@
     state.historyLimit = Math.round(
       clampNumber(byId("history-limit").value, 12, 2, 100)
     );
-    byId("chat-web-search-enabled").checked =
-      state.webSearchEnabled && state.provider !== "hordeImage";
-    setClass(
-      byId("chat-web-search-enabled").parentNode,
-      "active",
-      byId("chat-web-search-enabled").checked
-    );
+    updateWebToolUI();
     applyTheme();
     applyCompatibility();
   }
@@ -1863,13 +1876,7 @@
     byId("auto-model-refresh").checked = state.autoModelRefresh;
     byId("request-timeout").value = state.requestTimeout;
     byId("history-limit").value = state.historyLimit;
-    byId("chat-web-search-enabled").checked =
-      state.webSearchEnabled && state.provider !== "hordeImage";
-    setClass(
-      byId("chat-web-search-enabled").parentNode,
-      "active",
-      byId("chat-web-search-enabled").checked
-    );
+    updateWebToolUI();
   }
 
   function updatePrivacy() {
@@ -2017,7 +2024,9 @@
       }
     };
     byId("chat-web-search-enabled").onchange = function () {
+      state.webSearchToolActive = this.checked;
       setClass(this.parentNode, "active", this.checked);
+      saveState();
     };
     byId("load-pollinations").onclick = loadPollinationsModels;
     byId("load-horde-text").onclick = function () {

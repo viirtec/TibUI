@@ -56,15 +56,7 @@
           >
             &#9776;
           </button>
-          <label class="sr-only" for="provider">Provider</label>
-          <select id="provider" class="provider-select">
-            <option value="chat">ch.at</option>
-            <option value="pollinations">Pollinations</option>
-            <option value="hordeText">Stable Horde text</option>
-            <option value="hordeImage">Stable Horde images</option>
-            <option value="ollama">Ollama</option>
-            <option value="custom">OpenAI compatible</option>
-          </select>
+          <span class="topbar-title">TibUI</span>
           <div class="top-actions">
             <button
               class="icon-button theme-toggle"
@@ -203,6 +195,19 @@
               </div>
             </section>
             <div class="composer-actions">
+              <label class="sr-only" for="provider">Provider</label>
+              <select
+                id="provider"
+                class="provider-select"
+                aria-label="Provider"
+              >
+                <option value="chat">ch.at</option>
+                <option value="pollinations">Pollinations</option>
+                <option value="hordeText">Horde text</option>
+                <option value="hordeImage">Horde images</option>
+                <option value="ollama">Ollama</option>
+                <option value="custom">OpenAI API</option>
+              </select>
               <div class="model-bar">
                 <span id="model-logo" class="model-logo" aria-hidden="true"
                   ><span>T</span></span
@@ -474,15 +479,15 @@
           </fieldset>
 
           <fieldset>
-            <legend>Chat &amp; web search</legend>
+            <legend>Chat &amp; experimental search</legend>
             <label for="system-prompt">System prompt (optional)</label>
             <textarea id="system-prompt" rows="3" maxlength="2000"></textarea>
             <label class="check-line" for="web-search-enabled"
               ><span
-                ><strong>Enable web search</strong
+                ><strong>Experimental web search</strong
                 ><small
-                  >Search result snippets are added to text-model
-                  requests.</small
+                  >Shows a Web tool beside the message box. Search runs only
+                  when you also switch that tool on for a message.</small
                 ></span
               ><input id="web-search-enabled" type="checkbox"
             /></label>
