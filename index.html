@@ -140,6 +140,11 @@
               Weather
             </button>
             
+            <button id="wikipedia-tool-button" class="tool-button" type="button" aria-pressed="false" title="Look up knowledge on Wikipedia">
+              <span aria-hidden="true">W</span>
+              Wiki
+            </button>
+            
             
             <button id="image-controls-button" class="tool-button" type="button" aria-controls="image-advanced" aria-expanded="false" hidden>
               <span aria-hidden="true">&#9673;</span> Image controls
@@ -310,6 +315,36 @@
             <button id="test-search" class="secondary" type="button">
               Test search connection</button><span id="search-test-status" role="status"></span>
           </div>
+          <label class="check-line" for="wikipedia-enabled">
+            <span>
+              <strong>Wikipedia knowledge lookup</strong>
+              <small>
+                Free Wikipedia search. Enable Wiki beside the message box
+                when you want article context added to a request.
+              </small>
+            </span>
+            <input id="wikipedia-enabled" type="checkbox" checked />
+          </label>
+          
+          <div class="settings-grid">
+            <label for="wikipedia-language">
+              Wikipedia language
+              <select id="wikipedia-language">
+                <option value="en">English</option>
+                <option value="et">Eesti</option>
+                <option value="de">Deutsch</option>
+                <option value="fr">Français</option>
+                <option value="es">Español</option>
+                <option value="ru">Русский</option>
+              </select>
+            </label>
+            
+            <label for="wikipedia-results-count">
+              Results
+              <input id="wikipedia-results-count" type="number" min="1" max="5" value="3" />
+            </label>
+          </div>
+          
         </fieldset>
         
         <fieldset>
@@ -364,7 +399,9 @@
   <script src="tools/web-search.js"></script>
   <script src="tools/image-controls.js"></script>
   <script src="tools/weather.js"></script>
+  <script src="tools/wikipedia.js"></script>
   <script src="app.js"></script>
+  
   
   
 </body>

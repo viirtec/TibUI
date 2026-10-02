@@ -35,6 +35,11 @@
     webSearchToolActive: false,
     weatherEnabled: true,
     weatherToolActive: false,
+    wikipediaEnabled: true,
+    wikipediaToolActive: false,
+    wikipediaLanguage: "en",
+    wikipediaResultsCount: 3,
+    
     webSearchMode: "auto",
     webSearchRelay: "/searxng",
     webSearchInstances: ["https://severian-searxng.hf.space"],
@@ -557,7 +562,8 @@
     box = document.createElement("div");
     box.className = "sources";
     title = document.createElement("strong");
-    title.textContent = "Web sources";
+    title.textContent = "Sources";
+    
     box.appendChild(title);
     for (i = 0; i < sources.length; i += 1) {
       link = document.createElement("a");
@@ -569,6 +575,66 @@
     }
     container.appendChild(box);
   }
+  
+  function copyText(value, button) {
+    var text = String(value || "");
+    var original = button.innerHTML;
+    
+    function copied() {
+      button.innerHTML = "✓";
+      button.setAttribute("aria-label", "Copied");
+      button.title = "Copied";
+      
+      window.setTimeout(function() {
+        button.innerHTML = original;
+        button.setAttribute("aria-label", "Copy message");
+        button.title = "Copy message";
+      }, 1400);
+    }
+    
+    function failed() {
+      button.setAttribute("aria-label", "Copy failed");
+      button.title = "Copy failed";
+      
+      window.setTimeout(function() {
+        button.setAttribute("aria-label", "Copy message");
+        button.title = "Copy message";
+      }, 1400);
+    }
+    
+    if (
+      navigator.clipboard &&
+      typeof navigator.clipboard.writeText === "function"
+    ) {
+      navigator.clipboard.writeText(text)
+        .then(copied)
+        .catch(function() {
+          failed();
+        });
+      return;
+    }
+    
+    var textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    
+    try {
+      if (document.execCommand("copy")) {
+        copied();
+      } else {
+        failed();
+      }
+    } catch (ignore) {
+      failed();
+    }
+    
+    document.body.removeChild(textarea);
+  }
+  
   
   function renderMessages() {
     var chat = activeChat();
@@ -608,8 +674,32 @@
         renderText(bubble, message.content);
       }
       appendSources(bubble, message.sources);
+      var actions;
+      var copyButton;
+      
+      actions = document.createElement("div");
+      actions.className = "message-actions";
+      
+      copyButton = document.createElement("button");
+      copyButton.type = "button";
+      copyButton.className = "message-copy";
+      copyButton.setAttribute("aria-label", "Copy message");
+      copyButton.title = "Copy message";
+      copyButton.innerHTML = "⧉";
+      
+      copyButton.onclick = (function(content, button) {
+        return function(event) {
+          event.preventDefault();
+          event.stopPropagation();
+          copyText(content, button);
+        };
+      })(message.content, copyButton);
+      
+      actions.appendChild(copyButton);
+      
       row.appendChild(label);
       row.appendChild(bubble);
+      row.appendChild(actions);
       list.appendChild(row);
     }
     scrollConversation();
@@ -897,6 +987,8 @@
     );
     
     window.TibUITools.webSearch.updateUI();
+    window.TibUITools.wikipedia.updateUI();
+    window.TibUITools.weather.updateUI();
     
     rebuildModelSelect();
     saveState();
@@ -1463,6 +1555,7 @@
     var chat;
     var useWeb;
     var useWeather;
+    var useWikipedia;
     var sources = [];
     var context = "";
     
@@ -1504,6 +1597,9 @@
       window.TibUITools.weather.shouldRun(
         prompt
       );
+    useWikipedia =
+      window.TibUITools.wikipedia.isActive();
+    
     var contextParts = [];
     
     if (useWeb) {
@@ -1587,6 +1683,42 @@
             );
           });
       })
+      
+      .then(function() {
+        if (!useWikipedia) {
+          return null;
+        }
+        
+        byId("request-status").textContent =
+          "Looking up Wikipedia…";
+        
+        return window.TibUITools.wikipedia
+          .run(prompt)
+          .then(function(data) {
+            var wikiContext =
+              window.TibUITools.wikipedia
+              .formatContext(data);
+            
+            sources = sources.concat(data.results);
+            
+            if (context) {
+              context +=
+                "\n\n--- WIKIPEDIA KNOWLEDGE ---\n\n" +
+                wikiContext;
+            } else {
+              context = wikiContext;
+            }
+            
+            byId("request-status").textContent =
+              "Wikipedia lookup complete. Contacting model…";
+          })
+          .catch(function(error) {
+            byId("request-status").textContent =
+              "Wikipedia unavailable; continuing. " +
+              error.message;
+          });
+      })
+      
       
       .then(function() {
         return providerRequest(
@@ -1761,6 +1893,25 @@
     state.webSearchResultsCount = Math.round(
       clampNumber(byId("web-search-results-count").value, 5, 1, 10)
     );
+    state.wikipediaEnabled =
+      byId("wikipedia-enabled").checked;
+    
+    if (!state.wikipediaEnabled) {
+      state.wikipediaToolActive = false;
+    }
+    
+    state.wikipediaLanguage =
+      byId("wikipedia-language").value || "en";
+    
+    state.wikipediaResultsCount = Math.round(
+      clampNumber(
+        byId("wikipedia-results-count").value,
+        3,
+        1,
+        5
+      )
+    );
+    
     state.compatPreset = byId("compat-preset").value;
     state.maxCompatibility = byId("max-compatibility").checked;
     state.reduceMotion = byId("reduce-motion").checked;
@@ -1772,14 +1923,13 @@
     state.historyLimit = Math.round(
       clampNumber(byId("history-limit").value, 12, 2, 100)
     );
-    updateWebToolUI();
     if (
       window.TibUITools &&
       window.TibUITools.weather
     ) {
       window.TibUITools.weather.updateUI();
     }
-    
+    updateWebToolUI();
     applyTheme();
     applyCompatibility();
   }
@@ -1812,6 +1962,17 @@
     byId("web-search-relay").value = state.webSearchRelay;
     byId("web-search-instances").value = state.webSearchInstances.join("\n");
     byId("web-search-results-count").value = state.webSearchResultsCount;
+    byId("wikipedia-enabled").checked =
+      state.wikipediaEnabled;
+    
+    byId("wikipedia-language").value =
+      state.wikipediaLanguage;
+    
+    byId("wikipedia-results-count").value =
+      state.wikipediaResultsCount;
+    
+    window.TibUITools.wikipedia.updateUI();
+    
     byId("compat-preset").value = state.compatPreset;
     byId("max-compatibility").checked = state.maxCompatibility;
     byId("reduce-motion").checked = state.reduceMotion;
@@ -2037,6 +2198,15 @@
       saveState: saveState,
       setClass: setClass,
     });
+    
+    window.TibUITools.wikipedia.init({
+      state: state,
+      byId: byId,
+      requestJson: requestJson,
+      saveState: saveState,
+      setClass: setClass
+    });
+    
     
     bind();
     fillSettings();
