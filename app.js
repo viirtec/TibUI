@@ -1462,8 +1462,10 @@
     var prompt;
     var chat;
     var useWeb;
+    var useWeather;
     var sources = [];
     var context = "";
+    
     event.preventDefault();
     if (sending) {
       abortActive();
@@ -1498,24 +1500,34 @@
     setSending(true);
     useWeb =
       window.TibUITools.webSearch.isActive();
-    var useWeather =
+    useWeather =
       window.TibUITools.weather.shouldRun(
         prompt
       );
     var contextParts = [];
     
-    byId("request-status").textContent =
-      useWeb ?
-      "Searching the web…" :
-      "Contacting " +
-      providerLabel(state.provider) +
-      "…";
+    if (useWeb) {
+      byId("request-status").textContent =
+        "Searching the web…";
+    } else if (useWeather) {
+      byId("request-status").textContent =
+        "Getting weather…";
+    } else {
+      byId("request-status").textContent =
+        "Contacting " +
+        providerLabel(state.provider) +
+        "…";
+    }
+    
     
     Promise.resolve()
       .then(function() {
         if (!useWeb) {
           return null;
         }
+        
+        byId("request-status").textContent =
+          "Searching the web…";
         
         return window.TibUITools.webSearch
           .run(
@@ -1525,39 +1537,103 @@
           .then(function(data) {
             sources = data.results;
             
-            contextParts.push(
+            context =
               window.TibUITools.webSearch
-              .searchContext(
-                sources
-              )
-            );
+              .searchContext(sources);
+            
+            byId("request-status").textContent =
+              "Found " +
+              sources.length +
+              " web sources. Contacting model…";
+          })
+          .catch(function(error) {
+            byId("request-status").textContent =
+              "Web search unavailable; continuing. " +
+              error.message;
           });
       })
+      
       .then(function() {
         if (!useWeather) {
           return null;
         }
         
+        byId("request-status").textContent =
+          "Getting weather…";
+        
         return window.TibUITools.weather
           .run(prompt)
           .then(function(weather) {
-            contextParts.push(
+            var weatherContext =
               window.TibUITools.weather
-              .formatContext(weather)
+              .formatContext(weather);
+            
+            if (context) {
+              context +=
+                "\n\n--- WEATHER DATA ---\n\n" +
+                weatherContext;
+            } else {
+              context =
+                weatherContext;
+            }
+            
+            byId("request-status").textContent =
+              "Weather loaded. Contacting model…";
+          })
+          .catch(function(error) {
+            throw new Error(
+              "Weather lookup failed: " +
+              error.message
             );
           });
       })
+      
       .then(function() {
-        context =
-          contextParts.join(
-            "\n\n---\n\n"
-          );
-        
         return providerRequest(
           prompt,
           context
         );
+      })
+      
+      .then(function(content) {
+        chat.messages.push({
+          role: "assistant",
+          content: content,
+          kind: state.provider === "hordeImage" ?
+            "image" : "text",
+          alt: state.provider === "hordeImage" ?
+            prompt : "",
+          label: providerLabel(state.provider),
+          sources: sources,
+        });
+        
+        byId("request-status").textContent = "";
+        
+        saveState();
+        renderMessages();
+      })
+      
+      .catch(function(error) {
+        if (error.message !== "Request cancelled.") {
+          chat.messages.push({
+            role: "assistant",
+            content: error.message,
+            error: true,
+            label: providerLabel(state.provider),
+          });
+          
+          byId("request-status").textContent = "";
+          
+          renderMessages();
+        }
+      })
+      
+      .then(function() {
+        clearActiveJob();
+        setSending(false);
+        byId("prompt-input").focus();
       });
+    
     
   }
   
@@ -1697,6 +1773,13 @@
       clampNumber(byId("history-limit").value, 12, 2, 100)
     );
     updateWebToolUI();
+    if (
+      window.TibUITools &&
+      window.TibUITools.weather
+    ) {
+      window.TibUITools.weather.updateUI();
+    }
+    
     applyTheme();
     applyCompatibility();
   }
@@ -1714,7 +1797,7 @@
     byId("horde-image-karras").checked = state.hordeImageKarras;
     byId("horde-image-seed").value = state.hordeImageSeed;
     window.TibUITools.imageControls.updateLabels();
-    window.TibUITools.weather.updateUI();
+    
     byId("ollama-url").value = state.ollamaUrl;
     byId("ollama-model").value = state.ollamaModel;
     byId("ollama-temperature").value = state.ollamaTemperature;
@@ -1737,6 +1820,14 @@
     byId("request-timeout").value = state.requestTimeout;
     byId("history-limit").value = state.historyLimit;
     updateWebToolUI();
+    
+    if (
+      window.TibUITools &&
+      window.TibUITools.weather
+    ) {
+      window.TibUITools.weather.updateUI();
+    }
+    
   }
   
   function updatePrivacy() {

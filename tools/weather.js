@@ -247,40 +247,48 @@
   
   function parse(prompt) {
     var text =
-      String(prompt || "").trim();
+      String(prompt || "")
+      .replace(/^\s+|\s+$/g, "");
     
     var patterns = [
-      /weather\s+(?:in|for|at|near)\s+(.+)/i,
-      /forecast\s+(?:in|for|at|near)\s+(.+)/i,
-      /temperature\s+(?:in|for|at|near)\s+(.+)/i,
-      /conditions\s+(?:in|for|at|near)\s+(.+)/i,
-      /will\s+it\s+rain\s+(?:in|at|near)\s+(.+)/i,
-      /what(?:'s| is)\s+(?:the\s+)?weather\s+(?:in|for|at|near)\s+(.+)/i
+      /what(?:'s| is)\s+(?:the\s+)?weather\s+(?:like\s+)?(?:in|for|at|near)\s+(.+)/i,
+      
+      /(?:weather|forecast)\s+(?:in|for|at|near)\s+(.+)/i,
+      
+      /(?:temperature|conditions)\s+(?:in|for|at|near)\s+(.+)/i,
+      
+      /will\s+it\s+(?:rain|snow)\s+(?:in|at|near)\s+(.+)/i,
     ];
     
     var i;
     var match;
     var location;
     
-    for (i = 0; i < patterns.length; i += 1) {
+    for (
+      i = 0; i < patterns.length; i += 1
+    ) {
       match = text.match(patterns[i]);
       
-      if (match && match[1]) {
-        location = match[1]
-          .replace(
-            /\s+(today|tonight|tomorrow|this week|this weekend|next week)$/i,
-            ""
-          )
-          .trim();
-        
-        if (location) {
-          return location;
-        }
+      if (!match || !match[1]) {
+        continue;
+      }
+      
+      location = match[1]
+        .replace(/[?.!]+$/, "")
+        .replace(
+          /\s+(today|tonight|tomorrow|this week|this weekend|next week)$/i,
+          ""
+        )
+        .replace(/^\s+|\s+$/g, "");
+      
+      if (location) {
+        return location;
       }
     }
     
     return "";
   }
+  
   
   function shouldRun(prompt) {
     return (
