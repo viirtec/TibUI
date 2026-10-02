@@ -33,6 +33,8 @@
     showModelLogos: true,
     webSearchEnabled: false,
     webSearchToolActive: false,
+    weatherEnabled: true,
+    weatherToolActive: false,
     webSearchMode: "auto",
     webSearchRelay: "/searxng",
     webSearchInstances: ["https://severian-searxng.hf.space"],
@@ -1496,6 +1498,11 @@
     setSending(true);
     useWeb =
       window.TibUITools.webSearch.isActive();
+    var useWeather =
+      window.TibUITools.weather.shouldRun(
+        prompt
+      );
+    var contextParts = [];
     
     byId("request-status").textContent =
       useWeb ?
@@ -1518,60 +1525,40 @@
           .then(function(data) {
             sources = data.results;
             
-            context =
+            contextParts.push(
               window.TibUITools.webSearch
-              .searchContext(sources);
-            
-            byId("request-status").textContent =
-              "Found " +
-              sources.length +
-              " web sources through " +
-              data.route +
-              ". Contacting model…";
-          })
-          .catch(function(error) {
-            byId("request-status").textContent =
-              "Web search unavailable; sending without it. " +
-              error.message;
+              .searchContext(
+                sources
+              )
+            );
           });
       })
       .then(function() {
+        if (!useWeather) {
+          return null;
+        }
+        
+        return window.TibUITools.weather
+          .run(prompt)
+          .then(function(weather) {
+            contextParts.push(
+              window.TibUITools.weather
+              .formatContext(weather)
+            );
+          });
+      })
+      .then(function() {
+        context =
+          contextParts.join(
+            "\n\n---\n\n"
+          );
+        
         return providerRequest(
           prompt,
           context
         );
-      })
-      
-      .then(function(content) {
-        chat.messages.push({
-          role: "assistant",
-          content: content,
-          kind: state.provider === "hordeImage" ? "image" : "text",
-          alt: state.provider === "hordeImage" ? prompt : "",
-          label: providerLabel(state.provider),
-          sources: sources,
-        });
-        byId("request-status").textContent = "";
-        saveState();
-        renderMessages();
-      })
-      .catch(function(error) {
-        if (error.message !== "Request cancelled.") {
-          chat.messages.push({
-            role: "assistant",
-            content: error.message,
-            error: true,
-            label: providerLabel(state.provider),
-          });
-          byId("request-status").textContent = "";
-          renderMessages();
-        }
-      })
-      .then(function() {
-        clearActiveJob();
-        setSending(false);
-        byId("prompt-input").focus();
       });
+    
   }
   
   function resizePrompt() {
@@ -1727,7 +1714,7 @@
     byId("horde-image-karras").checked = state.hordeImageKarras;
     byId("horde-image-seed").value = state.hordeImageSeed;
     window.TibUITools.imageControls.updateLabels();
-    
+    window.TibUITools.weather.updateUI();
     byId("ollama-url").value = state.ollamaUrl;
     byId("ollama-model").value = state.ollamaModel;
     byId("ollama-temperature").value = state.ollamaTemperature;
@@ -1951,6 +1938,13 @@
       refreshImageModels: function() {
         loadHordeModels("image");
       },
+    });
+    window.TibUITools.weather.init({
+      state: state,
+      byId: byId,
+      requestJson: requestJson,
+      saveState: saveState,
+      setClass: setClass,
     });
     
     bind();
