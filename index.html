@@ -1,409 +1,763 @@
 <!doctype html>
 <html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#171815" />
+    <meta
+      name="description"
+      content="TibUI is a lightweight, private frontend for local and compatible AI APIs."
+    />
+    <title>TibUI</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
 
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#171815" />
-  <meta name="description" content="TibUI is a lightweight, private frontend for local and compatible AI APIs." />
-  <title>TibUI</title>
-  <link rel="stylesheet" href="style.css" />
-</head>
+  <body>
+    <div class="app">
+      <aside id="sidebar" aria-label="Chat history">
+        <div class="brand-line">
+          <a class="brand" href="./">TibUI</a>
+          <button
+            class="icon-button mobile-only"
+            id="close-menu"
+            type="button"
+            aria-label="Close menu"
+          >
+            &#215;
+          </button>
+        </div>
+        <button class="new-chat" id="new-chat" type="button">
+          <span aria-hidden="true">+</span> New chat
+        </button>
+        <p class="section-label">Chats</p>
+        <div id="chat-list" class="chat-list"></div>
+        <div class="side-bottom">
+          <p id="privacy-label" class="privacy">
+            <span></span> Private session — not saved
+          </p>
+          <button class="side-button" id="settings-button" type="button">
+            Settings
+          </button>
+        </div>
+      </aside>
+      <div id="scrim" class="scrim" aria-hidden="true"></div>
 
-<body>
-  <div class="app">
-    <aside id="sidebar" aria-label="Chat history">
-      <div class="brand-line">
-        <a class="brand" href="./">TibUI</a>
-        <button class="icon-button mobile-only" id="close-menu" type="button" aria-label="Close menu">
-          &#215;
-        </button>
-      </div>
-      <button class="new-chat" id="new-chat" type="button">
-        <span aria-hidden="true">+</span> New chat
-      </button>
-      <p class="section-label">Chats</p>
-      <div id="chat-list" class="chat-list"></div>
-      <div class="side-bottom">
-        <p id="privacy-label" class="privacy">
-          <span></span> Private session — not saved
-        </p>
-        <button class="side-button" id="settings-button" type="button">
-          Settings
-        </button>
-      </div>
-    </aside>
-    <div id="scrim" class="scrim" aria-hidden="true"></div>
-    
-    <main>
-      <header class="topbar">
-        <button class="icon-button menu-button" id="menu-button" type="button" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">
-          &#9776;
-        </button>
-        <span class="topbar-title">TibUI</span>
-        <div class="top-actions">
-          <button class="icon-button theme-toggle" id="theme-toggle" type="button" aria-label="Switch to light mode" title="Switch to light mode">
-            &#9728;
+      <main>
+        <header class="topbar">
+          <button
+            class="icon-button menu-button"
+            id="menu-button"
+            type="button"
+            aria-label="Open menu"
+            aria-controls="sidebar"
+            aria-expanded="false"
+          >
+            &#9776;
           </button>
-          <button class="icon-button settings-top" id="settings-top" type="button" aria-label="Open settings">
-            &#9881;
-          </button>
-        </div>
-      </header>
-      
-      <section id="conversation" class="conversation" aria-label="Conversation" aria-busy="false">
-        <div id="welcome" class="welcome">
-          <div class="mark" aria-hidden="true">T</div>
-          <h1>How can I help?</h1>
-          <p>A small interface for local and compatible AI APIs.</p>
-          <p id="provider-note" class="provider-note"></p>
-        </div>
-        <div id="messages" class="messages" role="log" aria-live="polite" aria-relevant="additions"></div>
-      </section>
-      
-      <div class="composer-area">
-        <p id="request-status" class="request-status" role="status"></p>
-        <form id="prompt-form" class="composer">
-          <label class="sr-only" for="prompt-input">Message</label>
-          <textarea id="prompt-input" rows="1" maxlength="16000" autocomplete="off" autocapitalize="sentences" placeholder="Message TibUI" enterkeyhint="send"></textarea>
-          <section id="image-advanced" class="image-advanced" hidden>
-            <div class="image-controls-heading">
-              <div>
-                <strong>Image controls</strong>
-                <small>Simple controls for the generated image.</small>
-              </div>
-              <button id="close-image-controls" class="image-controls-close" type="button" aria-label="Close image controls">
-                &#215;
-              </button>
-            </div>
-            <div class="image-control-row">
-              <label for="horde-image-size">Image shape
-                <select id="horde-image-size">
-                  <option value="512x512">Square — 512 × 512</option>
-                  <option value="512x768">Portrait — 512 × 768</option>
-                  <option value="768x512">Landscape — 768 × 512</option>
-                  <option value="768x768">Large square — 768 × 768</option>
-                </select>
-              </label>
-              <label for="horde-image-sampler">Drawing method
-                <select id="horde-image-sampler">
-                  <option value="k_euler_a">Creative — recommended</option>
-                  <option value="k_dpmpp_2m">Detailed</option>
-                  <option value="k_euler">Steady</option>
-                </select>
-              </label>
-            </div>
-            <div class="image-control-row">
-              <label for="horde-image-steps">Detail passes:
-                <output id="horde-image-steps-value">25</output>
-                <input id="horde-image-steps" type="range" min="10" max="50" step="1" value="25" />
-                <small>More can add detail but takes longer.</small>
-              </label>
-              <label for="horde-image-guidance">Prompt strength:
-                <output id="horde-image-guidance-value">7.5</output>
-                <input id="horde-image-guidance" type="range" min="1" max="20" step="0.5" value="7.5" />
-                <small>Higher follows your wording more strictly.</small>
-              </label>
-            </div>
-            <div class="image-control-row image-control-last">
-              <label class="image-check" for="horde-safety"><input id="horde-safety" type="checkbox" checked /> Safety
-                filter</label>
-              <label class="image-check" for="horde-image-karras"><input id="horde-image-karras" type="checkbox" checked />
-                Smoother detail</label>
-              <label for="horde-image-seed">Repeatable seed
-                <input id="horde-image-seed" type="text" inputmode="numeric" placeholder="Random" spellcheck="false" /></label>
-            </div>
-          </section>
-          <div class="composer-actions">
-            <label class="sr-only" for="provider">Provider</label>
-            <select id="provider" class="provider-select" aria-label="Provider">
-              <option value="chat">ch.at</option>
-              <option value="pollinations">Pollinations</option>
-              <option value="hordeText">Horde text</option>
-              <option value="hordeImage">Horde images</option>
-              <option value="ollama">Ollama</option>
-              <option value="custom">OpenAI API</option>
-            </select>
-            <div class="model-bar">
-              <span id="model-logo" class="model-logo" aria-hidden="true"><span>T</span></span>
-              <label class="sr-only" for="model">Model</label>
-              <select id="model"></select>
-              <span id="model-meta" class="model-meta"></span>
-            </div>
-            <label class="web-search-toggle" for="chat-web-search-enabled">
-              <input type="checkbox" id="chat-web-search-enabled" />
-              <span aria-hidden="true">⌕</span>
-              <span>Web</span>
-            </label>
-            <button id="weather-tool-button" class="tool-button" type="button" aria-pressed="false" title="Use weather information">
-              <span aria-hidden="true">☁</span>
-              Weather
+          <span class="topbar-title">TibUI</span>
+          <div class="top-actions">
+            <button
+              class="icon-button theme-toggle"
+              id="theme-toggle"
+              type="button"
+              aria-label="Switch to light mode"
+              title="Switch to light mode"
+            >
+              &#9728;
             </button>
-            
-            <button id="wikipedia-tool-button" class="tool-button" type="button" aria-pressed="false" title="Look up knowledge on Wikipedia">
-              <span aria-hidden="true">W</span>
-              Wiki
-            </button>
-            
-            
-            <button id="image-controls-button" class="tool-button" type="button" aria-controls="image-advanced" aria-expanded="false" hidden>
-              <span aria-hidden="true">&#9673;</span> Image controls
-            </button>
-            <span class="composer-spacer"></span>
-            <button id="send-button" class="send" type="submit" aria-label="Send">
-              &#8593;
+            <button
+              class="icon-button settings-top"
+              id="settings-top"
+              type="button"
+              aria-label="Open settings"
+            >
+              &#9881;
             </button>
           </div>
-        </form>
-        <p class="fine-print">
-          Your selected provider receives the messages or image prompts you
-          send.
-        </p>
-        <footer class="app-footer">
-          <span>Credits:
-            <a href="https://ch.at" target="_blank" rel="noopener">ch.at</a>
-            ·
-            <a href="https://aihorde.net" target="_blank" rel="noopener">Horde</a>
-            ·
-            <a href="https://pollinations.ai" target="_blank" rel="noopener">Pollinations</a>
-            ·
-            <a href="https://docs.searxng.org" target="_blank" rel="noopener">SearXNG</a></span>
-          <a class="github-link" href="https://github.com/viirtec/TibUI" target="_blank" rel="noopener"><img src="icons/github.svg" alt="" />GitHub</a>
-        </footer>
-      </div>
-    </main>
-  </div>
-  
-  <div id="settings-modal" class="modal" hidden>
-    <section class="settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-      <header>
-        <div>
-          <h2 id="settings-title">Settings</h2>
-          <p>Local preferences and provider connections.</p>
-        </div>
-        <button class="icon-button" id="close-settings" type="button" aria-label="Close settings">
-          &#215;
-        </button>
-      </header>
-      <div class="settings-body">
-        <fieldset>
-          <legend>Appearance</legend>
-          <div class="field-line">
-            <label for="theme">Theme</label>
-            <select id="theme">
-              <option value="system">System</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-            </select>
+        </header>
+
+        <section
+          id="conversation"
+          class="conversation"
+          aria-label="Conversation"
+          aria-busy="false"
+        >
+          <div id="welcome" class="welcome">
+            <div class="mark" aria-hidden="true">T</div>
+            <h1>How can I help?</h1>
+            <p>A small interface for local and compatible AI APIs.</p>
+            <p id="provider-note" class="provider-note"></p>
           </div>
-        </fieldset>
-        
-        <fieldset>
-          <legend>Privacy</legend>
-          <label class="check-line" for="save-chats"><span><strong>Save chats in a cookie</strong><small>Off by default. Old chats are removed when cookie space is
-                full.</small></span><input id="save-chats" type="checkbox" /></label>
-          <button id="clear-data" class="link-button" type="button">
-            Clear saved data
-          </button>
-        </fieldset>
-        
-        <fieldset>
-          <legend>Connection</legend>
-          <p id="provider-summary" class="summary"></p>
-          <div class="provider-settings" data-provider="chat">
-            <p><strong>GPT-4o via ch.at</strong></p>
-            <p>No credential is required.</p>
-          </div>
-          <div class="provider-settings" data-provider="pollinations" hidden>
-            <p><strong>Pollinations anonymous text API</strong></p>
-            <p>
-              Uses the legacy keyless endpoint and its live free-model list.
-            </p>
-            <button id="load-pollinations" class="secondary" type="button">
-              Refresh models
-            </button>
-          </div>
-          <div class="provider-settings" data-provider="hordeText" hidden>
-            <p><strong>Stable Horde text</strong></p>
-            <p>
-              Anonymous text jobs run on community workers and may wait in a
-              queue.
-            </p>
-            <p id="horde-text-model-info" class="model-info">
-              Loading live worker information…
-            </p>
-            <button id="load-horde-text" class="secondary" type="button">
-              Refresh text models
-            </button>
-          </div>
-          <div class="provider-settings" data-provider="hordeImage" hidden>
-            <p><strong>Stable Horde images</strong></p>
-            <p>
-              Anonymous image jobs run on community workers and may wait in a
-              queue.
-            </p>
-            <p>
-              Safety filtering is available in Advanced image controls near
-              the message bar. It hides adult-focused models and asks Horde to
-              censor detected adult output.
-            </p>
-            <p id="horde-image-model-info" class="model-info">
-              Loading live worker information…
-            </p>
-            <button id="load-horde-image" class="secondary" type="button">
-              Refresh image models
-            </button>
-          </div>
-          <div class="provider-settings" data-provider="ollama" hidden>
-            <label for="ollama-url">Ollama URL</label>
-            <input id="ollama-url" type="url" value="http://localhost:11434" spellcheck="false" autocapitalize="none" />
-            <label for="ollama-model">Model</label>
-            <div class="inline">
-              <input id="ollama-model" type="text" value="llama3.2" list="ollama-models" spellcheck="false" autocapitalize="none" /><button id="load-ollama" class="secondary" type="button">
-                Load models
-              </button>
-            </div>
-            <datalist id="ollama-models"></datalist>
-            <details>
-              <summary>Ollama generation parameters</summary>
-              <div class="settings-grid">
-                <label for="ollama-temperature">Temperature<input id="ollama-temperature" type="number" min="0" max="2" step="0.05" value="0.8" /></label>
-                <label for="ollama-top-p">Top P<input id="ollama-top-p" type="number" min="0" max="1" step="0.05" value="0.9" /></label>
-                <label for="ollama-context">Context tokens<input id="ollama-context" type="number" min="512" max="131072" step="512" value="4096" /></label>
-                <label for="ollama-seed">Seed<input id="ollama-seed" type="number" min="-1" step="1" value="-1" /></label>
-              </div>
-              <label for="ollama-keep-alive">Keep alive</label>
-              <input id="ollama-keep-alive" type="text" value="5m" spellcheck="false" />
-            </details>
-            <small>Remote pages need an HTTPS Ollama endpoint with matching CORS.
-              Local HTTP addresses can be blocked by browser security.</small>
-          </div>
-          <div class="provider-settings" data-provider="custom" hidden>
-            <label for="custom-url">API base URL</label>
-            <input id="custom-url" type="url" value="https://api.openai.com/v1" spellcheck="false" autocapitalize="none" />
-            <label for="custom-model">Model</label>
-            <input id="custom-model" type="text" value="gpt-4o-mini" spellcheck="false" autocapitalize="none" />
-            <label for="custom-key">API key (optional)</label>
-            <input id="custom-key" type="password" autocomplete="off" placeholder="Kept in memory only" />
-            <small>The endpoint must allow browser requests. Keys are never
-              saved.</small>
-          </div>
-        </fieldset>
-        
-        <fieldset>
-          <legend>Chat &amp; experimental search</legend>
-          <label for="system-prompt">System prompt (optional)</label>
-          <textarea id="system-prompt" rows="3" maxlength="2000"></textarea>
-          <label class="check-line" for="web-search-enabled"><span><strong>Experimental web search</strong><small>Shows a Web tool beside the message box. Search runs only
-                when you also switch that tool on for a message.</small></span><input id="web-search-enabled" type="checkbox" /></label>
-          <div class="settings-grid">
-            <label for="web-search-mode">Connection mode<select id="web-search-mode">
-                <option value="auto">Auto</option>
-                <option value="relay">Same-origin relay</option>
-                <option value="direct">Direct browser request</option>
-              </select></label>
-            <label for="web-search-results-count">Results<input id="web-search-results-count" type="number" min="1" max="10" value="5" /></label>
-          </div>
-          <label for="web-search-relay">Same-origin relay path</label>
-          <input id="web-search-relay" type="text" value="/searxng" spellcheck="false" autocapitalize="none" />
-          <label for="web-search-instances">SearXNG base URLs</label>
-          <textarea id="web-search-instances" rows="3" spellcheck="false" autocapitalize="none"></textarea>
-          <small class="settings-help">One URL per line. Auto mode tries the same-origin relay first,
-            then direct HTTPS endpoints. A private HTTP address cannot be
-            called from a public HTTPS page without a relay.</small>
-          <div class="button-line">
-            <button id="test-search" class="secondary" type="button">
-              Test search connection</button><span id="search-test-status" role="status"></span>
-          </div>
-          <label class="check-line" for="wikipedia-enabled">
-            <span>
-              <strong>Wikipedia knowledge lookup</strong>
-              <small>
-                Free Wikipedia search. Enable Wiki beside the message box
-                when you want article context added to a request.
-              </small>
-            </span>
-            <input id="wikipedia-enabled" type="checkbox" checked />
-          </label>
-          
-          <div class="settings-grid">
-            <label for="wikipedia-language">
-              Wikipedia language
-              <select id="wikipedia-language">
-                <option value="en">English</option>
-                <option value="et">Eesti</option>
-                <option value="de">Deutsch</option>
-                <option value="fr">Français</option>
-                <option value="es">Español</option>
-                <option value="ru">Русский</option>
-              </select>
-            </label>
-            
-            <label for="wikipedia-results-count">
-              Results
-              <input id="wikipedia-results-count" type="number" min="1" max="5" value="3" />
-            </label>
-          </div>
-          
-        </fieldset>
-        
-        <fieldset>
-          <legend>Compatibility &amp; performance</legend>
-          <label class="check-line" for="show-model-logos"><span><strong>Show model company logos</strong><small>Uses small local SVG files and makes no additional network
-                request.</small></span><input id="show-model-logos" type="checkbox" checked /></label>
-          <div class="field-line">
-            <label for="compat-preset">Preset</label><select id="compat-preset">
-              <option value="maximum">Maximum compatibility</option>
-              <option value="balanced">Balanced</option>
-              <option value="fast">Fast and minimal</option>
-            </select>
-          </div>
-          <label class="check-line" for="max-compatibility"><span><strong>Maximum compatibility</strong><small>Uses conservative rendering and request behavior for older
-                browsers and devices.</small></span><input id="max-compatibility" type="checkbox" checked /></label>
-          <label class="check-line" for="reduce-motion"><span><strong>Reduce motion</strong><small>Disable interface animations and transitions.</small></span><input id="reduce-motion" type="checkbox" checked /></label>
-          <label class="check-line" for="visual-effects"><span><strong>Visual effects</strong><small>Enable shadows and decorative effects.</small></span><input id="visual-effects" type="checkbox" /></label>
-          <label class="check-line" for="auto-model-refresh"><span><strong>Refresh model lists on startup</strong><small>Disable to save bandwidth and speed up first paint.</small></span><input id="auto-model-refresh" type="checkbox" /></label>
-          <div class="settings-grid">
-            <label for="request-timeout">Request timeout (seconds)<input id="request-timeout" type="number" min="30" max="300" value="180" /></label>
-            <label for="history-limit">Messages sent per request<input id="history-limit" type="number" min="2" max="100" value="12" /></label>
-          </div>
-        </fieldset>
-        
-        <section class="credits" aria-labelledby="credits-title">
-          <h3 id="credits-title">Free provider credits</h3>
-          <p>
-            <a href="https://ch.at" target="_blank" rel="noopener">ch.at</a>
-            provides credential-less GPT-4o-compatible chat access.
-            <a href="https://aihorde.net" target="_blank" rel="noopener">AI Horde / Stable Horde</a>
-            provides community-powered text and image generation.
-            <a href="https://pollinations.ai" target="_blank" rel="noopener">Pollinations.AI</a>
-            provides the anonymous legacy text endpoint.
-            <a href="https://docs.searxng.org" target="_blank" rel="noopener">SearXNG</a>
-            powers optional self-hosted web search.
-          </p>
-          <p>
-            <a class="github-link" href="https://github.com/viirtec/TibUI" target="_blank" rel="noopener"><img src="icons/github.svg" alt="" />TibUI on GitHub</a>
-          </p>
+          <div
+            id="messages"
+            class="messages"
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions"
+          ></div>
         </section>
-      </div>
-      <footer>
-        <span id="settings-status" role="status"></span><button id="done-settings" class="primary" type="button">
-          Done
-        </button>
-      </footer>
-    </section>
-  </div>
-  
-  <noscript>TibUI needs JavaScript to connect to an AI provider.</noscript>
-  <script src="tools/registry.js"></script>
-  <script src="tools/web-search.js"></script>
-  <script src="tools/image-controls.js"></script>
-  <script src="tools/weather.js"></script>
-  <script src="tools/wikipedia.js"></script>
-  <script src="app.js"></script>
-  
-  
-  
-</body>
 
+        <div class="composer-area">
+          <p id="request-status" class="request-status" role="status"></p>
+          <form id="prompt-form" class="composer">
+            <label class="sr-only" for="prompt-input">Message</label>
+            <textarea
+              id="prompt-input"
+              rows="1"
+              maxlength="16000"
+              autocomplete="off"
+              autocapitalize="sentences"
+              placeholder="Message TibUI"
+              enterkeyhint="send"
+            ></textarea>
+            <div
+              id="attachment-list"
+              class="attachment-list"
+              role="status"
+            ></div>
+            <div class="composer-actions">
+              <div class="tools-wrap">
+                <button
+                  id="tools-button"
+                  class="icon-button"
+                  type="button"
+                  aria-label="Tools"
+                  aria-expanded="false"
+                  aria-controls="tools-menu"
+                >
+                  +
+                </button>
+                <section
+                  id="tools-menu"
+                  class="tools-menu"
+                  aria-label="Tools"
+                  hidden
+                >
+                  <strong>Tools</strong>
+                  <div id="tool-switches"></div>
+                  <button id="attach-file" class="secondary" type="button">
+                    Attach text files (experimental)
+                  </button>
+                  <input
+                    id="text-files"
+                    type="file"
+                    accept=".txt,.json,.md,.markdown,.csv,.log,.xml,.yaml,.yml"
+                    multiple
+                    hidden
+                  />
+                </section>
+              </div>
+              <div class="composer-selectors">
+                <label class="sr-only" for="provider">Provider</label>
+                <select
+                  id="provider"
+                  class="provider-select"
+                  aria-label="Provider"
+                >
+                  <option value="chat">ch.at</option>
+                  <option value="pollinations">Pollinations</option>
+                  <option value="hordeText">Horde text</option>
+                  <option value="hordeImage">Horde images</option>
+                  <option value="ollama">Ollama</option>
+                  <option value="custom">OpenAI API</option>
+                </select>
+                <div class="model-bar">
+                  <span id="model-logo" class="model-logo" aria-hidden="true"
+                    ><span>T</span></span
+                  >
+                  <label class="sr-only" for="model">Model</label>
+                  <select id="model"></select>
+                </div>
+              </div>
+              <span class="composer-spacer"></span>
+              <button
+                id="send-button"
+                class="send"
+                type="submit"
+                aria-label="Send"
+              >
+                &#8593;
+              </button>
+            </div>
+            <div class="composer-details">
+              <span id="model-meta" class="model-meta" role="status"></span>
+              <div
+                id="enabled-tools"
+                class="enabled-tools"
+                aria-label="Enabled tools"
+              ></div>
+            </div>
+          </form>
+          <p class="fine-print">
+            Your selected provider receives the messages or image prompts you
+            send.
+          </p>
+          <footer class="app-footer">
+            <span
+              >Credits:
+              <a href="https://ch.at" target="_blank" rel="noopener">ch.at</a>
+              ·
+              <a href="https://aihorde.net" target="_blank" rel="noopener"
+                >Horde</a
+              >
+              ·
+              <a href="https://pollinations.ai" target="_blank" rel="noopener"
+                >Pollinations</a
+              >
+              ·
+              <a href="https://docs.searxng.org" target="_blank" rel="noopener"
+                >SearXNG</a
+              ></span
+            >
+            <a
+              class="github-link"
+              href="https://github.com/viirtec/TibUI"
+              target="_blank"
+              rel="noopener"
+              ><img src="icons/github.svg" alt="" />GitHub</a
+            >
+          </footer>
+        </div>
+      </main>
+    </div>
+
+    <div id="settings-modal" class="modal" hidden>
+      <section
+        class="settings"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+      >
+        <header>
+          <div>
+            <h2 id="settings-title">Settings</h2>
+            <p>Local preferences and provider connections.</p>
+          </div>
+          <button
+            class="icon-button"
+            id="close-settings"
+            type="button"
+            aria-label="Close settings"
+          >
+            &#215;
+          </button>
+        </header>
+        <div class="settings-body">
+          <fieldset>
+            <legend>Appearance</legend>
+            <div class="field-line">
+              <label for="theme">Theme</label>
+              <select id="theme">
+                <option value="system">System</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+              </select>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Privacy</legend>
+            <label class="check-line" for="save-chats"
+              ><span
+                ><strong>Save chats in a cookie</strong
+                ><small
+                  >Off by default. Old chats are removed when cookie space is
+                  full.</small
+                ></span
+              ><input id="save-chats" type="checkbox"
+            /></label>
+            <div class="button-line">
+              <button id="export-current-chat" class="secondary" type="button">
+                Export current chat
+              </button>
+              <button id="export-chats" class="secondary" type="button">
+                Export chats
+              </button>
+              <button id="import-chats" class="secondary" type="button">
+                Import chats
+              </button>
+              <input
+                id="chat-import-file"
+                type="file"
+                accept=".json,application/json"
+                hidden
+              />
+            </div>
+            <section
+              id="chat-import-preview"
+              hidden
+              aria-label="Choose chats to import"
+            >
+              <p>Select the chats to import:</p>
+              <div id="chat-import-options"></div>
+              <div class="button-line">
+                <button
+                  id="confirm-chat-import"
+                  class="secondary"
+                  type="button"
+                >
+                  Import selected chats
+                </button>
+                <button id="cancel-chat-import" class="secondary" type="button">
+                  Cancel import
+                </button>
+              </div>
+            </section>
+            <p id="chat-transfer-status" role="status"></p>
+            <button id="clear-data" class="link-button" type="button">
+              Clear saved data
+            </button>
+          </fieldset>
+
+          <fieldset>
+            <legend>Image generation</legend>
+            <section id="image-advanced" class="image-advanced">
+              <div class="image-controls-heading">
+                <div>
+                  <strong>Image controls</strong>
+                  <small>Simple controls for the generated image.</small>
+                </div>
+              </div>
+              <div class="image-control-row">
+                <label for="horde-image-size"
+                  >Image shape
+                  <select id="horde-image-size">
+                    <option value="512x512">Square — 512 × 512</option>
+                    <option value="512x768">Portrait — 512 × 768</option>
+                    <option value="768x512">Landscape — 768 × 512</option>
+                    <option value="768x768">Large square — 768 × 768</option>
+                  </select>
+                </label>
+                <label for="horde-image-sampler"
+                  >Drawing method
+                  <select id="horde-image-sampler">
+                    <option value="k_euler_a">Creative — recommended</option>
+                    <option value="k_dpmpp_2m">Detailed</option>
+                    <option value="k_euler">Steady</option>
+                  </select>
+                </label>
+              </div>
+              <div class="image-control-row">
+                <label for="horde-image-steps"
+                  >Detail passes:
+                  <output id="horde-image-steps-value">25</output>
+                  <input
+                    id="horde-image-steps"
+                    type="range"
+                    min="10"
+                    max="50"
+                    step="1"
+                    value="25"
+                  />
+                  <small>More can add detail but takes longer.</small>
+                </label>
+                <label for="horde-image-guidance"
+                  >Prompt strength:
+                  <output id="horde-image-guidance-value">7.5</output>
+                  <input
+                    id="horde-image-guidance"
+                    type="range"
+                    min="1"
+                    max="20"
+                    step="0.5"
+                    value="7.5"
+                  />
+                  <small>Higher follows your wording more strictly.</small>
+                </label>
+              </div>
+              <div class="image-control-row image-control-last">
+                <label class="image-check" for="horde-safety"
+                  ><input id="horde-safety" type="checkbox" checked /> Safety
+                  filter</label
+                >
+                <label class="image-check" for="horde-image-karras"
+                  ><input id="horde-image-karras" type="checkbox" checked />
+                  Smoother detail</label
+                >
+                <label for="horde-image-seed"
+                  >Repeatable seed
+                  <input
+                    id="horde-image-seed"
+                    type="text"
+                    inputmode="numeric"
+                    placeholder="Random"
+                    spellcheck="false"
+                /></label>
+              </div>
+            </section>
+          </fieldset>
+
+          <fieldset>
+            <legend>Connection</legend>
+            <p id="provider-summary" class="summary"></p>
+            <div class="provider-settings" data-provider="chat">
+              <p><strong>GPT-4o via ch.at</strong></p>
+              <p>No credential is required.</p>
+            </div>
+            <div class="provider-settings" data-provider="pollinations" hidden>
+              <p><strong>Pollinations anonymous text API</strong></p>
+              <p>
+                Uses the legacy keyless endpoint and its live free-model list.
+              </p>
+              <button id="load-pollinations" class="secondary" type="button">
+                Refresh models
+              </button>
+            </div>
+            <div class="provider-settings" data-provider="hordeText" hidden>
+              <p><strong>Stable Horde text</strong></p>
+              <p>
+                Anonymous text jobs run on community workers and may wait in a
+                queue.
+              </p>
+              <p id="horde-text-model-info" class="model-info">
+                Loading live worker information…
+              </p>
+              <button id="load-horde-text" class="secondary" type="button">
+                Refresh text models
+              </button>
+            </div>
+            <div class="provider-settings" data-provider="hordeImage" hidden>
+              <p><strong>Stable Horde images</strong></p>
+              <p>
+                Anonymous image jobs run on community workers and may wait in a
+                queue.
+              </p>
+              <p>
+                Safety filtering is available in the Image generation settings.
+                It hides adult-focused models and asks Horde to censor detected
+                adult output.
+              </p>
+              <p id="horde-image-model-info" class="model-info">
+                Loading live worker information…
+              </p>
+              <button id="load-horde-image" class="secondary" type="button">
+                Refresh image models
+              </button>
+            </div>
+            <div class="provider-settings" data-provider="ollama" hidden>
+              <label for="ollama-url">Ollama URL</label>
+              <input
+                id="ollama-url"
+                type="url"
+                value="http://localhost:11434"
+                spellcheck="false"
+                autocapitalize="none"
+              />
+              <label for="ollama-model">Model</label>
+              <div class="inline">
+                <input
+                  id="ollama-model"
+                  type="text"
+                  value="llama3.2"
+                  list="ollama-models"
+                  spellcheck="false"
+                  autocapitalize="none"
+                /><button id="load-ollama" class="secondary" type="button">
+                  Load models
+                </button>
+              </div>
+              <datalist id="ollama-models"></datalist>
+              <details>
+                <summary>Ollama generation parameters</summary>
+                <div class="settings-grid">
+                  <label for="ollama-temperature"
+                    >Temperature<input
+                      id="ollama-temperature"
+                      type="number"
+                      min="0"
+                      max="2"
+                      step="0.05"
+                      value="0.8"
+                  /></label>
+                  <label for="ollama-top-p"
+                    >Top P<input
+                      id="ollama-top-p"
+                      type="number"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value="0.9"
+                  /></label>
+                  <label for="ollama-context"
+                    >Context tokens<input
+                      id="ollama-context"
+                      type="number"
+                      min="512"
+                      max="131072"
+                      step="512"
+                      value="4096"
+                  /></label>
+                  <label for="ollama-seed"
+                    >Seed<input
+                      id="ollama-seed"
+                      type="number"
+                      min="-1"
+                      step="1"
+                      value="-1"
+                  /></label>
+                </div>
+                <label for="ollama-keep-alive">Keep alive</label>
+                <input
+                  id="ollama-keep-alive"
+                  type="text"
+                  value="5m"
+                  spellcheck="false"
+                />
+              </details>
+              <small
+                >Remote pages need an HTTPS Ollama endpoint with matching CORS.
+                Local HTTP addresses can be blocked by browser security.</small
+              >
+            </div>
+            <div class="provider-settings" data-provider="custom" hidden>
+              <label for="custom-url">API base URL</label>
+              <input
+                id="custom-url"
+                type="url"
+                value="https://api.openai.com/v1"
+                spellcheck="false"
+                autocapitalize="none"
+              />
+              <label for="custom-model">Model</label>
+              <input
+                id="custom-model"
+                type="text"
+                value="gpt-4o-mini"
+                spellcheck="false"
+                autocapitalize="none"
+              />
+              <label for="custom-key">API key (optional)</label>
+              <input
+                id="custom-key"
+                type="password"
+                autocomplete="off"
+                placeholder="Kept in memory only"
+              />
+              <small
+                >The endpoint must allow browser requests. Keys are never
+                saved.</small
+              >
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Chat &amp; experimental search</legend>
+            <label class="check-line" for="auto-tools"
+              ><span
+                ><strong>Automatic tool selection</strong
+                ><small
+                  >Off by default. Recognize weather, currency conversions,
+                  GitHub, Wikipedia, web-search and research requests. Manual
+                  selections still apply.</small
+                ></span
+              ><input id="auto-tools" type="checkbox"
+            /></label>
+            <label for="system-prompt">System prompt (optional)</label>
+            <textarea id="system-prompt" rows="3" maxlength="2000"></textarea>
+            <label class="check-line" for="web-search-enabled"
+              ><span
+                ><strong>Experimental web search</strong
+                ><small
+                  >Makes Web search available in the + tools menu. Search runs
+                  only when you also switch that tool on for a message.</small
+                ></span
+              ><input id="web-search-enabled" type="checkbox"
+            /></label>
+            <div class="settings-grid">
+              <label for="web-search-mode"
+                >Connection mode<select id="web-search-mode">
+                  <option value="auto">Auto</option>
+                  <option value="relay">Same-origin relay</option>
+                  <option value="direct">Direct browser request</option>
+                </select></label
+              >
+              <label for="web-search-results-count"
+                >Results<input
+                  id="web-search-results-count"
+                  type="number"
+                  min="1"
+                  max="10"
+                  value="5"
+              /></label>
+            </div>
+            <label for="web-search-relay">Same-origin relay path</label>
+            <input
+              id="web-search-relay"
+              type="text"
+              value="/searxng"
+              spellcheck="false"
+              autocapitalize="none"
+            />
+            <label for="web-search-instances">SearXNG base URLs</label>
+            <textarea
+              id="web-search-instances"
+              rows="3"
+              spellcheck="false"
+              autocapitalize="none"
+            ></textarea>
+            <small class="settings-help"
+              >One URL per line. Auto mode tries the same-origin relay first,
+              then direct HTTPS endpoints. A private HTTP address cannot be
+              called from a public HTTPS page without a relay.</small
+            >
+            <div class="button-line">
+              <button id="test-search" class="secondary" type="button">
+                Test search connection</button
+              ><span id="search-test-status" role="status"></span>
+            </div>
+            <label class="check-line" for="wikipedia-enabled">
+              <span>
+                <strong>Wikipedia knowledge lookup</strong>
+                <small>
+                  Free Wikipedia search. Enable Wikipedia in the + tools menu
+                  when you want article context added to a request.
+                </small>
+              </span>
+              <input id="wikipedia-enabled" type="checkbox" checked />
+            </label>
+
+            <div class="settings-grid">
+              <label for="wikipedia-language">
+                Wikipedia language
+                <select id="wikipedia-language">
+                  <option value="en">English</option>
+                  <option value="et">Eesti</option>
+                  <option value="de">Deutsch</option>
+                  <option value="fr">Français</option>
+                  <option value="es">Español</option>
+                  <option value="ru">Русский</option>
+                </select>
+              </label>
+
+              <label for="wikipedia-results-count">
+                Results
+                <input
+                  id="wikipedia-results-count"
+                  type="number"
+                  min="1"
+                  max="5"
+                  value="3"
+                />
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Compatibility &amp; performance</legend>
+            <label class="check-line" for="show-model-logos"
+              ><span
+                ><strong>Show model company logos</strong
+                ><small
+                  >Uses small local SVG files and makes no additional network
+                  request.</small
+                ></span
+              ><input id="show-model-logos" type="checkbox" checked
+            /></label>
+            <div class="field-line">
+              <label for="compat-preset">Preset</label
+              ><select id="compat-preset">
+                <option value="maximum">Maximum compatibility</option>
+                <option value="balanced">Balanced</option>
+                <option value="fast">Fast and minimal</option>
+              </select>
+            </div>
+            <label class="check-line" for="max-compatibility"
+              ><span
+                ><strong>Maximum compatibility</strong
+                ><small
+                  >Uses conservative rendering and request behavior for older
+                  browsers and devices.</small
+                ></span
+              ><input id="max-compatibility" type="checkbox" checked
+            /></label>
+            <label class="check-line" for="reduce-motion"
+              ><span
+                ><strong>Reduce motion</strong
+                ><small
+                  >Disable interface animations and transitions.</small
+                ></span
+              ><input id="reduce-motion" type="checkbox" checked
+            /></label>
+            <label class="check-line" for="visual-effects"
+              ><span
+                ><strong>Visual effects</strong
+                ><small>Enable shadows and decorative effects.</small></span
+              ><input id="visual-effects" type="checkbox"
+            /></label>
+            <label class="check-line" for="auto-model-refresh"
+              ><span
+                ><strong>Refresh model lists on startup</strong
+                ><small
+                  >Disable to save bandwidth and speed up first paint.</small
+                ></span
+              ><input id="auto-model-refresh" type="checkbox"
+            /></label>
+            <div class="settings-grid">
+              <label for="request-timeout"
+                >Request timeout (seconds)<input
+                  id="request-timeout"
+                  type="number"
+                  min="30"
+                  max="300"
+                  value="180"
+              /></label>
+              <label for="history-limit"
+                >Messages sent per request<input
+                  id="history-limit"
+                  type="number"
+                  min="2"
+                  max="100"
+                  value="12"
+              /></label>
+            </div>
+          </fieldset>
+
+          <section class="credits" aria-labelledby="credits-title">
+            <h3 id="credits-title">Free provider credits</h3>
+            <p>
+              <a href="https://ch.at" target="_blank" rel="noopener">ch.at</a>
+              provides credential-less GPT-4o-compatible chat access.
+              <a href="https://aihorde.net" target="_blank" rel="noopener"
+                >AI Horde / Stable Horde</a
+              >
+              provides community-powered text and image generation.
+              <a href="https://pollinations.ai" target="_blank" rel="noopener"
+                >Pollinations.AI</a
+              >
+              provides the anonymous legacy text endpoint.
+              <a href="https://docs.searxng.org" target="_blank" rel="noopener"
+                >SearXNG</a
+              >
+              powers optional self-hosted web search.
+            </p>
+            <p>
+              <a
+                class="github-link"
+                href="https://github.com/viirtec/TibUI"
+                target="_blank"
+                rel="noopener"
+                ><img src="icons/github.svg" alt="" />TibUI on GitHub</a
+              >
+            </p>
+          </section>
+        </div>
+        <footer>
+          <span id="settings-status" role="status"></span
+          ><button id="done-settings" class="primary" type="button">
+            Done
+          </button>
+        </footer>
+      </section>
+    </div>
+
+    <noscript>TibUI needs JavaScript to connect to an AI provider.</noscript>
+    <script src="tools/manifest.js"></script>
+    <script src="tools/registry.js"></script>
+    <script src="chat-files.js"></script>
+    <script src="code-controls.js"></script>
+    <script src="app.js"></script>
+  </body>
 </html>

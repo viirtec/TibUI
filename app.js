@@ -1,6 +1,6 @@
-(function() {
+(function () {
   "use strict";
-  
+
   var COOKIE_NAME = "tibui_state_v2";
   var HORDE_API = "https://aihorde.net/api/v2";
   var ANON_KEY = "0000000000";
@@ -8,8 +8,10 @@
     chats: [],
     activeId: "",
     provider: "chat",
+    previousTextProvider: "chat",
     theme: "dark",
     saveChats: false,
+    autoTools: false,
     systemPrompt: "",
     pollinationsModel: "openai-fast",
     hordeTextModel: "",
@@ -39,7 +41,7 @@
     wikipediaToolActive: false,
     wikipediaLanguage: "en",
     wikipediaResultsCount: 3,
-    
+
     webSearchMode: "auto",
     webSearchRelay: "/searxng",
     webSearchInstances: ["https://severian-searxng.hf.space"],
@@ -50,7 +52,7 @@
     visualEffects: false,
     autoModelRefresh: false,
     requestTimeout: 180,
-    historyLimit: 12,
+    historyLimit: 12
   };
   var pollinationsModels = [];
   var hordeTextModels = [];
@@ -60,18 +62,19 @@
   var activeTimer = null;
   var activeHordeJob = null;
   var sending = false;
+  var requestVersion = 0;
   var lastFocus = null;
-  
+
   function byId(id) {
     return document.getElementById(id);
   }
-  
+
   function addClass(node, name) {
     if (node && (" " + node.className + " ").indexOf(" " + name + " ") < 0) {
       node.className = node.className ? node.className + " " + name : name;
     }
   }
-  
+
   function removeClass(node, name) {
     if (node) {
       node.className = (" " + node.className + " ")
@@ -79,7 +82,7 @@
         .replace(/^\s+|\s+$/g, "");
     }
   }
-  
+
   function setClass(node, name, enabled) {
     if (enabled) {
       addClass(node, name);
@@ -87,7 +90,7 @@
       removeClass(node, name);
     }
   }
-  
+
   function clampNumber(value, fallback, minimum, maximum) {
     var number = Number(value);
     if (!isFinite(number)) {
@@ -95,11 +98,11 @@
     }
     return Math.max(minimum, Math.min(maximum, number));
   }
-  
+
   function stripSlash(value) {
     return String(value || "").replace(/\/+$/, "");
   }
-  
+
   function parseLines(value) {
     var lines = String(value || "").split(/\r?\n/);
     var clean = [];
@@ -115,7 +118,7 @@
     }
     return clean;
   }
-  
+
   function cookieValue(name) {
     var parts = document.cookie ? document.cookie.split(";") : [];
     var i;
@@ -128,7 +131,7 @@
     }
     return "";
   }
-  
+
   function loadState() {
     var raw = cookieValue(COOKIE_NAME) || cookieValue("tibui_state_v1");
     var saved;
@@ -166,7 +169,7 @@
       state.chats = [];
     }
   }
-  
+
   function stateForCookie() {
     var copy = {};
     var key;
@@ -190,7 +193,7 @@
     }
     return copy;
   }
-  
+
   function saveState() {
     if (!state.saveChats) {
       document.cookie = COOKIE_NAME + "=; Max-Age=0; Path=/; SameSite=Lax";
@@ -210,13 +213,13 @@
     }
     updatePrivacy();
   }
-  
+
   function makeId() {
     return (
       String(new Date().getTime()) + String(Math.floor(Math.random() * 100000))
     );
   }
-  
+
   function newChat() {
     var current = activeChat();
     if (current && (!current.messages || !current.messages.length)) {
@@ -235,7 +238,7 @@
     closeMenu();
     byId("prompt-input").focus();
   }
-  
+
   function activeChat() {
     var i;
     for (i = 0; i < state.chats.length; i += 1) {
@@ -245,7 +248,7 @@
     }
     return null;
   }
-  
+
   function renderChats() {
     var list = byId("chat-list");
     var i;
@@ -278,7 +281,7 @@
       list.appendChild(entry);
     }
   }
-  
+
   function selectChat(event) {
     state.activeId = event.currentTarget.getAttribute("data-chat-id");
     saveState();
@@ -286,7 +289,7 @@
     renderMessages();
     closeMenu();
   }
-  
+
   function deleteChat(event) {
     var id = event.currentTarget.getAttribute("data-chat-id");
     var index = -1;
@@ -313,7 +316,7 @@
     renderChats();
     renderMessages();
   }
-  
+
   function escapeHtml(value) {
     return String(value || "")
       .replace(/&/g, "&amp;")
@@ -322,7 +325,7 @@
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
   }
-  
+
   function inlineMarkdown(value) {
     var tokens = [];
     var source = String(value || "");
@@ -330,19 +333,19 @@
     var i;
     source = source.replace(
       /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/gi,
-      function(match, text, url) {
+      function (match, text, url) {
         var marker = "\u0001TIB" + tokens.length + "\u0002";
         tokens.push(
           '<a href="' +
-          escapeHtml(url) +
-          '" target="_blank" rel="noopener noreferrer">' +
-          escapeHtml(text) +
-          "</a>"
+            escapeHtml(url) +
+            '" target="_blank" rel="noopener noreferrer">' +
+            escapeHtml(text) +
+            "</a>"
         );
         return marker;
       }
     );
-    source = source.replace(/`([^`\n]+)`/g, function(match, code) {
+    source = source.replace(/`([^`\n]+)`/g, function (match, code) {
       var marker = "\u0001TIB" + tokens.length + "\u0002";
       tokens.push("<code>" + escapeHtml(code) + "</code>");
       return marker;
@@ -358,7 +361,7 @@
     }
     return html;
   }
-  
+
   function tableCells(line) {
     var value = String(line || "")
       .replace(/^\s*\|/, "")
@@ -370,7 +373,7 @@
     }
     return cells;
   }
-  
+
   function isTableDivider(line) {
     var cells = tableCells(line);
     var i;
@@ -384,7 +387,7 @@
     }
     return true;
   }
-  
+
   function renderText(container, value) {
     var lines = String(value || "")
       .replace(/\r\n?/g, "\n")
@@ -394,6 +397,7 @@
     var listType = "";
     var inCode = false;
     var codeLanguage = "";
+    var codeFence = "";
     var codeLines = [];
     var i = 0;
     var line;
@@ -401,13 +405,15 @@
     var cells;
     var row;
     var j;
-    
+
     function closeParagraph() {
       var rendered = [];
       var paragraphIndex;
       if (paragraph.length) {
         for (
-          paragraphIndex = 0; paragraphIndex < paragraph.length; paragraphIndex += 1
+          paragraphIndex = 0;
+          paragraphIndex < paragraph.length;
+          paragraphIndex += 1
         ) {
           rendered.push(inlineMarkdown(paragraph[paragraphIndex]));
         }
@@ -415,18 +421,23 @@
         paragraph = [];
       }
     }
-    
+
     function closeList() {
       if (listType) {
         html += "</" + listType + ">";
         listType = "";
       }
     }
-    
+
     while (i < lines.length) {
       line = lines[i];
       if (inCode) {
-        if (/^\s*```/.test(line)) {
+        match = line.match(/^\s*(`{3,}|~{3,})\s*$/);
+        if (
+          match &&
+          match[1].charAt(0) === codeFence.charAt(0) &&
+          match[1].length >= codeFence.length
+        ) {
           html +=
             '<pre><code class="language-' +
             escapeHtml(codeLanguage) +
@@ -442,12 +453,13 @@
         i += 1;
         continue;
       }
-      match = line.match(/^\s*```\s*([A-Za-z0-9_-]*)/);
+      match = line.match(/^\s*(`{3,}|~{3,})\s*([A-Za-z0-9_-]*)/);
       if (match) {
         closeParagraph();
         closeList();
         inCode = true;
-        codeLanguage = match[1] || "plain";
+        codeFence = match[1];
+        codeLanguage = match[2] || "plain";
         i += 1;
         continue;
       }
@@ -544,13 +556,18 @@
     }
     if (inCode) {
       html +=
-        "<pre><code>" + escapeHtml(codeLines.join("\n")) + "</code></pre>";
+        '<pre><code class="language-' +
+        escapeHtml(codeLanguage) +
+        '">' +
+        escapeHtml(codeLines.join("\n")) +
+        "</code></pre>";
     }
     closeParagraph();
     closeList();
     container.innerHTML = html;
+    window.TibUICode.enhance(container, copyText);
   }
-  
+
   function appendSources(container, sources) {
     var box;
     var title;
@@ -563,7 +580,7 @@
     box.className = "sources";
     title = document.createElement("strong");
     title.textContent = "Sources";
-    
+
     box.appendChild(title);
     for (i = 0; i < sources.length; i += 1) {
       link = document.createElement("a");
@@ -575,45 +592,47 @@
     }
     container.appendChild(box);
   }
-  
+
   function copyText(value, button) {
     var text = String(value || "");
     var original = button.innerHTML;
-    
+    var originalLabel = button.getAttribute("aria-label") || "Copy message";
+
     function copied() {
       button.innerHTML = "✓";
       button.setAttribute("aria-label", "Copied");
       button.title = "Copied";
-      
-      window.setTimeout(function() {
+
+      window.setTimeout(function () {
         button.innerHTML = original;
-        button.setAttribute("aria-label", "Copy message");
-        button.title = "Copy message";
+        button.setAttribute("aria-label", originalLabel);
+        button.title = originalLabel;
       }, 1400);
     }
-    
+
     function failed() {
       button.setAttribute("aria-label", "Copy failed");
       button.title = "Copy failed";
-      
-      window.setTimeout(function() {
-        button.setAttribute("aria-label", "Copy message");
-        button.title = "Copy message";
+
+      window.setTimeout(function () {
+        button.setAttribute("aria-label", originalLabel);
+        button.title = originalLabel;
       }, 1400);
     }
-    
+
     if (
       navigator.clipboard &&
       typeof navigator.clipboard.writeText === "function"
     ) {
-      navigator.clipboard.writeText(text)
+      navigator.clipboard
+        .writeText(text)
         .then(copied)
-        .catch(function() {
+        .catch(function () {
           failed();
         });
       return;
     }
-    
+
     var textarea = document.createElement("textarea");
     textarea.value = text;
     textarea.setAttribute("readonly", "");
@@ -621,7 +640,7 @@
     textarea.style.left = "-9999px";
     document.body.appendChild(textarea);
     textarea.select();
-    
+
     try {
       if (document.execCommand("copy")) {
         copied();
@@ -631,11 +650,10 @@
     } catch (ignore) {
       failed();
     }
-    
+
     document.body.removeChild(textarea);
   }
-  
-  
+
   function renderMessages() {
     var chat = activeChat();
     var list = byId("messages");
@@ -661,9 +679,9 @@
       label = document.createElement("div");
       label.className = "message-label";
       label.textContent =
-        message.role === "user" ?
-        "You" :
-        message.label || providerLabel(state.provider);
+        message.role === "user"
+          ? "You"
+          : message.label || providerLabel(state.provider);
       if (message.kind === "image") {
         image = document.createElement("img");
         image.className = "generated-image";
@@ -676,27 +694,27 @@
       appendSources(bubble, message.sources);
       var actions;
       var copyButton;
-      
+
       actions = document.createElement("div");
       actions.className = "message-actions";
-      
+
       copyButton = document.createElement("button");
       copyButton.type = "button";
       copyButton.className = "message-copy";
       copyButton.setAttribute("aria-label", "Copy message");
       copyButton.title = "Copy message";
       copyButton.innerHTML = "⧉";
-      
-      copyButton.onclick = (function(content, button) {
-        return function(event) {
+
+      copyButton.onclick = (function (content, button) {
+        return function (event) {
           event.preventDefault();
           event.stopPropagation();
           copyText(content, button);
         };
       })(message.content, copyButton);
-      
+
       actions.appendChild(copyButton);
-      
+
       row.appendChild(label);
       row.appendChild(bubble);
       row.appendChild(actions);
@@ -704,14 +722,14 @@
     }
     scrollConversation();
   }
-  
+
   function scrollConversation() {
     var node = byId("conversation");
-    window.setTimeout(function() {
+    window.setTimeout(function () {
       node.scrollTop = node.scrollHeight;
     }, 0);
   }
-  
+
   function providerLabel(provider) {
     var labels = {
       chat: "GPT-4o",
@@ -719,30 +737,33 @@
       hordeText: "Stable Horde",
       hordeImage: "Stable Horde image",
       ollama: "Ollama",
-      custom: "OpenAI compatible",
+      custom: "OpenAI compatible"
     };
     return labels[provider] || "Assistant";
   }
-  
+
   function providerNote(provider) {
     var notes = {
       chat: "Credential-less GPT-4o-compatible access provided by ch.at.",
-      pollinations: "Free models from the Pollinations anonymous legacy endpoint.",
-      hordeText: "Community-hosted text models. Queue time depends on live workers.",
-      hordeImage: "Community-hosted image models with optional safety filtering.",
+      pollinations:
+        "Free models from the Pollinations anonymous legacy endpoint.",
+      hordeText:
+        "Community-hosted text models. Queue time depends on live workers.",
+      hordeImage:
+        "Community-hosted image models with optional safety filtering.",
       ollama: "Connect directly to an Ollama server you control.",
-      custom: "Connect to a browser-accessible OpenAI-compatible endpoint.",
+      custom: "Connect to a browser-accessible OpenAI-compatible endpoint."
     };
     return notes[provider] || "";
   }
-  
+
   function option(select, value, label) {
     var item = document.createElement("option");
     item.value = value;
     item.textContent = label;
     select.appendChild(item);
   }
-  
+
   function etaText(seconds) {
     var value = Number(seconds);
     if (!isFinite(value) || value < 0) {
@@ -753,7 +774,7 @@
     }
     return "ETA " + Math.round(value / 60) + "m";
   }
-  
+
   function simplifyHordeTextName(raw) {
     var name = String(raw || "")
       .split("/")
@@ -767,7 +788,7 @@
       .replace(/^\s+|\s+$/g, "");
     return name || raw;
   }
-  
+
   function currentModel() {
     if (state.provider === "chat") {
       return "gpt-4o";
@@ -786,7 +807,7 @@
     }
     return state.customModel;
   }
-  
+
   function currentHordeRecord(list, name) {
     var i;
     for (i = 0; i < list.length; i += 1) {
@@ -796,7 +817,7 @@
     }
     return null;
   }
-  
+
   function updateModelMeta() {
     var meta = "";
     var record;
@@ -810,13 +831,15 @@
         Number(record.count || 0) +
         " worker" +
         (Number(record.count || 0) === 1 ? "" : "s") +
+        " · Queue: " +
+        Number(record.queued || 0) +
         " · " +
         etaText(record.eta);
     }
     byId("model-meta").textContent = meta;
     updateModelLogo();
   }
-  
+
   function logoFor(provider, model) {
     var value = String(model || "").toLowerCase();
     if (provider === "ollama") {
@@ -871,7 +894,7 @@
     }
     return { fallback: "AI" };
   }
-  
+
   function updateModelLogo() {
     var holder = byId("model-logo");
     var logo = logoFor(state.provider, currentModel());
@@ -881,7 +904,7 @@
       node = document.createElement("img");
       node.src = logo.src;
       node.alt = "";
-      node.onerror = function() {
+      node.onerror = function () {
         holder.innerHTML = "<span>" + escapeHtml(logo.fallback) + "</span>";
       };
     } else {
@@ -890,7 +913,7 @@
     }
     holder.appendChild(node);
   }
-  
+
   function rebuildModelSelect() {
     var select = byId("model");
     var i;
@@ -948,7 +971,7 @@
     select.disabled = state.provider === "chat";
     updateModelMeta();
   }
-  
+
   function onModelChange() {
     var value = byId("model").value;
     if (state.provider === "pollinations") {
@@ -971,7 +994,7 @@
     saveState();
     updateModelMeta();
   }
-  
+
   function updateProviderUI(loadLive) {
     var panels = document.querySelectorAll(".provider-settings");
     var i;
@@ -982,14 +1005,8 @@
     }
     byId("provider-summary").textContent = providerNote(state.provider);
     byId("provider-note").textContent = providerNote(state.provider);
-    window.TibUITools.imageControls.setAvailable(
-      state.provider === "hordeImage"
-    );
-    
-    window.TibUITools.webSearch.updateUI();
-    window.TibUITools.wikipedia.updateUI();
-    window.TibUITools.weather.updateUI();
-    
+    window.TibUITools.updateUI();
+
     rebuildModelSelect();
     saveState();
     if (loadLive && state.provider === "hordeText" && !hordeTextModels.length) {
@@ -1010,24 +1027,23 @@
       loadPollinationsModels();
     }
   }
-  
-  function updateWebToolUI() {
-    if (
-      window.TibUITools &&
-      window.TibUITools.webSearch
-    ) {
-      window.TibUITools.webSearch.updateUI();
-    }
-  }
-  
-  
-  function requestJson(method, url, body, headers) {
-    return new Promise(function(resolve, reject) {
+
+  function requestJson(
+    method,
+    url,
+    body,
+    headers,
+    textResponse,
+    timeoutSeconds
+  ) {
+    return new Promise(function (resolve, reject) {
       var xhr = new XMLHttpRequest();
       var key;
       activeXhr = xhr;
       xhr.open(method, url, true);
-      xhr.timeout = clampNumber(state.requestTimeout, 180, 30, 300) * 1000;
+      xhr.timeout =
+        (timeoutSeconds || clampNumber(state.requestTimeout, 180, 30, 300)) *
+        1000;
       if (body !== null && typeof body !== "undefined") {
         xhr.setRequestHeader("Content-Type", "application/json");
       }
@@ -1041,7 +1057,7 @@
           }
         }
       }
-      xhr.onreadystatechange = function() {
+      xhr.onreadystatechange = function () {
         var parsed;
         var message;
         if (xhr.readyState !== 4) {
@@ -1051,6 +1067,14 @@
           activeXhr = null;
         }
         if (xhr.status >= 200 && xhr.status < 300) {
+          if (textResponse) {
+            if (xhr.responseText.length > 2000000) {
+              reject(new Error("Paper download exceeds the 2 MB limit."));
+              return;
+            }
+            resolve(xhr.responseText);
+            return;
+          }
           try {
             parsed = xhr.responseText ? JSON.parse(xhr.responseText) : {};
             resolve(parsed);
@@ -1072,13 +1096,21 @@
         }
         reject(new Error(message));
       };
-      xhr.ontimeout = function() {
+      if (textResponse) {
+        xhr.onprogress = function (event) {
+          if (event.loaded > 2000000) {
+            reject(new Error("Paper download exceeds the 2 MB limit."));
+            xhr.abort();
+          }
+        };
+      }
+      xhr.ontimeout = function () {
         if (activeXhr === xhr) {
           activeXhr = null;
         }
         reject(new Error("The request timed out."));
       };
-      xhr.onerror = function() {
+      xhr.onerror = function () {
         if (activeXhr === xhr) {
           activeXhr = null;
         }
@@ -1088,26 +1120,26 @@
           )
         );
       };
-      xhr.onabort = function() {
+      xhr.onabort = function () {
         if (activeXhr === xhr) {
           activeXhr = null;
         }
         reject(new Error("Request cancelled."));
       };
       xhr.send(
-        body === null || typeof body === "undefined" ?
-        null :
-        JSON.stringify(body)
+        body === null || typeof body === "undefined"
+          ? null
+          : JSON.stringify(body)
       );
     });
   }
-  
+
   function loadPollinationsModels() {
     var button = byId("load-pollinations");
     button.disabled = true;
     button.textContent = "Loading…";
     requestJson("GET", "https://text.pollinations.ai/models", null, null)
-      .then(function(data) {
+      .then(function (data) {
         var list = Array.isArray(data) ? data : data.models || [];
         var found = [];
         var i;
@@ -1119,8 +1151,10 @@
           if (name) {
             found.push({
               name: name,
-              label: typeof item === "string" ?
-                item : item.description || item.name || item.id,
+              label:
+                typeof item === "string"
+                  ? item
+                  : item.description || item.name || item.id
             });
           }
         }
@@ -1132,21 +1166,21 @@
         byId("settings-status").textContent =
           found.length + " Pollinations models loaded.";
       })
-      .catch(function(error) {
+      .catch(function (error) {
         byId("settings-status").textContent = error.message;
       })
-      .then(function() {
+      .then(function () {
         button.disabled = false;
         button.textContent = "Refresh models";
       });
   }
-  
+
   function isAdultModel(name) {
     return /\bnsfw\b|porn|hentai|explicit|uncensored|nudity/i.test(
       String(name || "")
     );
   }
-  
+
   function loadHordeModels(type) {
     var isText = type === "text";
     var button = byId(isText ? "load-horde-text" : "load-horde-image");
@@ -1157,12 +1191,12 @@
     button.textContent = "Loading…";
     info.textContent = "Loading live worker information…";
     requestJson(
-        "GET",
-        HORDE_API + "/status/models?type=" + encodeURIComponent(type),
-        null,
-        null
-      )
-      .then(function(data) {
+      "GET",
+      HORDE_API + "/status/models?type=" + encodeURIComponent(type),
+      null,
+      null
+    )
+      .then(function (data) {
         var list = Array.isArray(data) ? data : [];
         var clean = [];
         var i;
@@ -1178,10 +1212,10 @@
             count: Number(list[i].count || 0),
             eta: Number(list[i].eta || 0),
             queued: Number(list[i].queued || 0),
-            performance: Number(list[i].performance || 0),
+            performance: Number(list[i].performance || 0)
           });
         }
-        clean.sort(function(a, b) {
+        clean.sort(function (a, b) {
           return (
             b.count - a.count || a.eta - b.eta || a.name.localeCompare(b.name)
           );
@@ -1203,31 +1237,31 @@
             state.hordeImageModel = clean[0].name;
           }
         }
-        info.textContent = clean.length ?
-          clean.length +
-          " live models. Worker count and ETA update whenever this list is refreshed." :
-          "No compatible workers are currently available.";
+        info.textContent = clean.length
+          ? clean.length +
+            " live models. Worker count and ETA update whenever this list is refreshed."
+          : "No compatible workers are currently available.";
         rebuildModelSelect();
         saveState();
       })
-      .catch(function(error) {
+      .catch(function (error) {
         info.textContent = error.message;
       })
-      .then(function() {
+      .then(function () {
         button.disabled = false;
-        button.textContent = isText ?
-          "Refresh text models" :
-          "Refresh image models";
+        button.textContent = isText
+          ? "Refresh text models"
+          : "Refresh image models";
       });
   }
-  
+
   function loadOllamaModels() {
     var button = byId("load-ollama");
     var base = stripSlash(byId("ollama-url").value);
     button.disabled = true;
     button.textContent = "Loading…";
     requestJson("GET", base + "/api/tags", null, null)
-      .then(function(data) {
+      .then(function (data) {
         var list = data.models || [];
         var datalist = byId("ollama-models");
         var i;
@@ -1245,21 +1279,17 @@
         byId("settings-status").textContent =
           ollamaModels.length + " Ollama models found.";
       })
-      .catch(function(error) {
+      .catch(function (error) {
         byId("settings-status").textContent =
           error.message +
           " Configure OLLAMA_ORIGINS when connecting across origins.";
       })
-      .then(function() {
+      .then(function () {
         button.disabled = false;
         button.textContent = "Load models";
       });
   }
-  
-  
-  
-  
-  
+
   function historyMessages(webContext) {
     var chat = activeChat();
     var history = chat ? chat.messages : [];
@@ -1267,56 +1297,63 @@
     var start;
     var i;
     var system = String(state.systemPrompt || "").trim();
-    
+    var content;
+
     if (webContext) {
       system += (system ? "\n\n" : "") + webContext;
     }
-    
+
     start = Math.max(0, history.length - state.historyLimit);
-    
+
     for (i = start; i < history.length; i += 1) {
       if (history[i].kind === "image" || history[i].error) {
         continue;
       }
-      
+
+      content =
+        history[i].content +
+        (history[i].attachmentContext
+          ? "\n\n" + history[i].attachmentContext
+          : "");
       if (history[i].role === "user" && system) {
         filtered.push({
           role: "user",
-          content: "[SYSTEM INSTRUCTIONS]\n" +
+          content:
+            "[SYSTEM INSTRUCTIONS]\n" +
             system +
             "\n\n[END SYSTEM INSTRUCTIONS]\n\n" +
-            history[i].content
+            content
         });
       } else {
         filtered.push({
           role: history[i].role,
-          content: history[i].content
+          content: content
         });
       }
     }
-    
+
     return filtered;
   }
-  
-  
+
   function openAIRequest(url, model, webContext, headers) {
     return requestJson(
       "POST",
-      url, { model: model, messages: historyMessages(webContext), stream: false },
+      url,
+      { model: model, messages: historyMessages(webContext), stream: false },
       headers
-    ).then(function(data) {
+    ).then(function (data) {
       if (!data.choices || !data.choices[0] || !data.choices[0].message) {
         throw new Error("The provider returned no message.");
       }
       return String(data.choices[0].message.content || "");
     });
   }
-  
+
   function ollamaRequest(webContext) {
     var options = {
       temperature: state.ollamaTemperature,
       top_p: state.ollamaTopP,
-      num_ctx: state.ollamaContext,
+      num_ctx: state.ollamaContext
     };
     if (state.ollamaSeed >= 0) {
       options.seed = state.ollamaSeed;
@@ -1329,17 +1366,17 @@
         messages: historyMessages(webContext),
         stream: false,
         keep_alive: state.ollamaKeepAlive,
-        options: options,
+        options: options
       },
       null
-    ).then(function(data) {
+    ).then(function (data) {
       if (!data.message) {
         throw new Error("Ollama returned no message.");
       }
       return String(data.message.content || "");
     });
   }
-  
+
   function customChatUrl() {
     var base = stripSlash(state.customUrl);
     if (/\/chat\/completions$/i.test(base)) {
@@ -1347,26 +1384,26 @@
     }
     return base + "/chat/completions";
   }
-  
+
   function hordePrompt(webContext) {
     var messages = historyMessages(webContext);
     var parts = [];
     var i;
     for (i = 0; i < messages.length; i += 1) {
       parts.push(
-        (messages[i].role === "assistant" ?
-          "Assistant" :
-          messages[i].role === "system" ?
-          "System" :
-          "User") +
-        ": " +
-        messages[i].content
+        (messages[i].role === "assistant"
+          ? "Assistant"
+          : messages[i].role === "system"
+            ? "System"
+            : "User") +
+          ": " +
+          messages[i].content
       );
     }
     parts.push("Assistant:");
     return parts.join("\n\n");
   }
-  
+
   function clearActiveJob() {
     if (activeTimer) {
       window.clearTimeout(activeTimer);
@@ -1374,17 +1411,17 @@
     }
     activeHordeJob = null;
   }
-  
+
   function hordeGenerationPath(kind, action, id) {
     var path = kind === "text" ? "/generate/text/" : "/generate/";
     return HORDE_API + path + action + (id ? "/" + encodeURIComponent(id) : "");
   }
-  
+
   function pollHordeJob(id, kind, resolve, reject) {
     requestJson("GET", hordeGenerationPath(kind, "status", id), null, {
-        "Client-Agent": "TibUI:2.0:viirtec",
-      })
-      .then(function(data) {
+      "Client-Agent": "TibUI:2.0:viirtec"
+    })
+      .then(function (data) {
         var generation;
         if (data.faulted) {
           throw new Error("Stable Horde reported that the job failed.");
@@ -1396,9 +1433,9 @@
             throw new Error("Stable Horde finished without an output.");
           }
           resolve(
-            kind === "text" ?
-            String(generation.text || "") :
-            String(generation.img || "")
+            kind === "text"
+              ? String(generation.text || "")
+              : String(generation.img || "")
           );
           return;
         }
@@ -1408,18 +1445,18 @@
           " ahead · " +
           etaText(data.wait_time);
         activeTimer = window.setTimeout(
-          function() {
+          function () {
             pollHordeJob(id, kind, resolve, reject);
           },
           state.maxCompatibility ? 3500 : 2500
         );
       })
-      .catch(function(error) {
+      .catch(function (error) {
         clearActiveJob();
         reject(error);
       });
   }
-  
+
   function hordeRequest(kind, prompt, webContext) {
     var isText = kind === "text";
     var body;
@@ -1433,12 +1470,12 @@
           max_context_length: Math.max(1024, state.ollamaContext),
           max_length: 512,
           temperature: state.ollamaTemperature,
-          top_p: state.ollamaTopP,
+          top_p: state.ollamaTopP
         },
         models: [state.hordeTextModel],
         trusted_workers: false,
         validated_backends: true,
-        slow_workers: true,
+        slow_workers: true
       };
     } else {
       dimensions = String(state.hordeImageSize || "512x512").split("x");
@@ -1449,7 +1486,7 @@
         steps: state.hordeImageSteps,
         cfg_scale: state.hordeImageGuidance,
         sampler_name: state.hordeImageSampler,
-        karras: state.hordeImageKarras,
+        karras: state.hordeImageKarras
       };
       if (state.hordeImageSeed) {
         imageParams.seed = state.hordeImageSeed;
@@ -1463,23 +1500,23 @@
         trusted_workers: false,
         slow_workers: true,
         r2: true,
-        shared: true,
+        shared: true
       };
     }
     return requestJson("POST", hordeGenerationPath(kind, "async", ""), body, {
       apikey: ANON_KEY,
-      "Client-Agent": "TibUI:2.0:viirtec",
-    }).then(function(data) {
+      "Client-Agent": "TibUI:2.0:viirtec"
+    }).then(function (data) {
       if (!data.id) {
         throw new Error("Stable Horde did not accept the job.");
       }
       activeHordeJob = { id: data.id, kind: kind };
-      return new Promise(function(resolve, reject) {
+      return new Promise(function (resolve, reject) {
         pollHordeJob(data.id, kind, resolve, reject);
       });
     });
   }
-  
+
   function providerRequest(prompt, webContext) {
     var headers = {};
     if (state.provider === "chat") {
@@ -1517,7 +1554,7 @@
       headers
     );
   }
-  
+
   function setSending(value) {
     sending = value;
     byId("conversation").setAttribute("aria-busy", value ? "true" : "false");
@@ -1527,9 +1564,12 @@
       value ? "Cancel request" : "Send"
     );
     byId("prompt-input").disabled = value;
+    byId("provider").disabled = value;
+    byId("model").disabled = value;
   }
-  
+
   function abortActive() {
+    requestVersion += 1;
     var job = activeHordeJob;
     if (activeXhr) {
       activeXhr.abort();
@@ -1543,32 +1583,37 @@
       requestJson(
         "DELETE",
         hordeGenerationPath(job.kind, "status", job.id),
-        null, { apikey: ANON_KEY, "Client-Agent": "TibUI:2.0:viirtec" }
-      ).catch(function() {});
+        null,
+        { apikey: ANON_KEY, "Client-Agent": "TibUI:2.0:viirtec" }
+      ).catch(function () {});
     }
     setSending(false);
     byId("request-status").textContent = "Request cancelled.";
   }
-  
+
   function submitPrompt(event) {
     var prompt;
     var chat;
-    var useWeb;
-    var useWeather;
-    var useWikipedia;
+    var version;
+    var warnings = [];
     var sources = [];
     var context = "";
-    
+
     event.preventDefault();
     if (sending) {
       abortActive();
       return;
     }
     syncStateFromInputs();
+    if (window.TibUIFiles.isReading()) {
+      byId("request-status").textContent = "Wait for files to finish loading.";
+      return;
+    }
     prompt = byId("prompt-input").value.replace(/^\s+|\s+$/g, "");
     if (!prompt) {
       return;
     }
+    window.TibUITools.preparePrompt(prompt);
     if (
       (state.provider === "hordeText" && !state.hordeTextModel) ||
       (state.provider === "hordeImage" && !state.hordeImageModel)
@@ -1582,7 +1627,12 @@
       newChat();
       chat = activeChat();
     }
-    chat.messages.push({ role: "user", content: prompt });
+    var attachmentContext = window.TibUIFiles.consume();
+    chat.messages.push({
+      role: "user",
+      content: prompt,
+      attachmentContext: attachmentContext
+    });
     if (chat.title === "New chat") {
       chat.title = prompt.substring(0, 48);
     }
@@ -1591,190 +1641,80 @@
     renderChats();
     renderMessages();
     setSending(true);
-    useWeb =
-      window.TibUITools.webSearch.isActive();
-    useWeather =
-      window.TibUITools.weather.shouldRun(
-        prompt
-      );
-    useWikipedia =
-      window.TibUITools.wikipedia.isActive();
-    
-    var contextParts = [];
-    
-    if (useWeb) {
-      byId("request-status").textContent =
-        "Searching the web…";
-    } else if (useWeather) {
-      byId("request-status").textContent =
-        "Getting weather…";
-    } else {
-      byId("request-status").textContent =
-        "Contacting " +
-        providerLabel(state.provider) +
-        "…";
-    }
-    
-    
-    Promise.resolve()
-      .then(function() {
-        if (!useWeb) {
-          return null;
+    version = ++requestVersion;
+    window.TibUITools.run(prompt, function () {
+      return version !== requestVersion;
+    })
+      .then(function (data) {
+        if (version !== requestVersion) {
+          throw new Error("Request cancelled.");
         }
-        
+        sources = data.sources;
+        warnings = data.warnings;
+        context = data.context;
         byId("request-status").textContent =
-          "Searching the web…";
-        
-        return window.TibUITools.webSearch
-          .run(
-            prompt.substring(0, 300),
-            false
-          )
-          .then(function(data) {
-            sources = data.results;
-            
-            context =
-              window.TibUITools.webSearch
-              .searchContext(sources);
-            
-            byId("request-status").textContent =
-              "Found " +
-              sources.length +
-              " web sources. Contacting model…";
-          })
-          .catch(function(error) {
-            byId("request-status").textContent =
-              "Web search unavailable; continuing. " +
-              error.message;
-          });
-      })
-      
-      .then(function() {
-        if (!useWeather) {
-          return null;
-        }
-        
-        byId("request-status").textContent =
-          "Getting weather…";
-        
-        return window.TibUITools.weather
-          .run(prompt)
-          .then(function(weather) {
-            var weatherContext =
-              window.TibUITools.weather
-              .formatContext(weather);
-            
-            if (context) {
-              context +=
-                "\n\n--- WEATHER DATA ---\n\n" +
-                weatherContext;
-            } else {
-              context =
-                weatherContext;
-            }
-            
-            byId("request-status").textContent =
-              "Weather loaded. Contacting model…";
-          })
-          .catch(function(error) {
-            throw new Error(
-              "Weather lookup failed: " +
-              error.message
-            );
-          });
-      })
-      
-      .then(function() {
-        if (!useWikipedia) {
-          return null;
-        }
-        
-        byId("request-status").textContent =
-          "Looking up Wikipedia…";
-        
-        return window.TibUITools.wikipedia
-          .run(prompt)
-          .then(function(data) {
-            var wikiContext =
-              window.TibUITools.wikipedia
-              .formatContext(data);
-            
-            sources = sources.concat(data.results);
-            
-            if (context) {
-              context +=
-                "\n\n--- WIKIPEDIA KNOWLEDGE ---\n\n" +
-                wikiContext;
-            } else {
-              context = wikiContext;
-            }
-            
-            byId("request-status").textContent =
-              "Wikipedia lookup complete. Contacting model…";
-          })
-          .catch(function(error) {
-            byId("request-status").textContent =
-              "Wikipedia unavailable; continuing. " +
-              error.message;
-          });
-      })
-      
-      
-      .then(function() {
+          "Contacting " + providerLabel(state.provider) + "…";
         return providerRequest(
-          prompt,
+          prompt +
+            (state.provider === "hordeImage" && attachmentContext
+              ? "\n\n" + attachmentContext
+              : ""),
           context
         );
       })
-      
-      .then(function(content) {
+      .then(function (content) {
+        if (version !== requestVersion) {
+          throw new Error("Request cancelled.");
+        }
         chat.messages.push({
           role: "assistant",
           content: content,
-          kind: state.provider === "hordeImage" ?
-            "image" : "text",
-          alt: state.provider === "hordeImage" ?
-            prompt : "",
+          kind: state.provider === "hordeImage" ? "image" : "text",
+          alt: state.provider === "hordeImage" ? prompt : "",
           label: providerLabel(state.provider),
-          sources: sources,
+          sources: sources
         });
-        
-        byId("request-status").textContent = "";
-        
+
+        byId("request-status").textContent = warnings.join(" ");
+
         saveState();
         renderMessages();
       })
-      
-      .catch(function(error) {
-        if (error.message !== "Request cancelled.") {
+
+      .catch(function (error) {
+        if (
+          version === requestVersion &&
+          error.message !== "Request cancelled."
+        ) {
           chat.messages.push({
             role: "assistant",
             content: error.message,
             error: true,
-            label: providerLabel(state.provider),
+            label: providerLabel(state.provider)
           });
-          
+
           byId("request-status").textContent = "";
-          
+
           renderMessages();
         }
       })
-      
-      .then(function() {
+
+      .then(function () {
+        if (version !== requestVersion) {
+          return;
+        }
         clearActiveJob();
         setSending(false);
         byId("prompt-input").focus();
       });
-    
-    
   }
-  
+
   function resizePrompt() {
     var input = byId("prompt-input");
     input.style.height = "38px";
     input.style.height = Math.min(170, input.scrollHeight) + "px";
   }
-  
+
   function applyTheme() {
     var isDark;
     var themeColor = document.querySelector('meta[name="theme-color"]');
@@ -1790,14 +1730,14 @@
       "aria-label",
       isDark ? "Switch to light mode" : "Switch to dark mode"
     );
-    byId("theme-toggle").title = isDark ?
-      "Switch to light mode" :
-      "Switch to dark mode";
+    byId("theme-toggle").title = isDark
+      ? "Switch to light mode"
+      : "Switch to dark mode";
     if (themeColor) {
       themeColor.setAttribute("content", isDark ? "#171815" : "#f6f6f3");
     }
   }
-  
+
   function applyCompatibility() {
     setClass(document.body, "max-compat", state.maxCompatibility);
     setClass(document.body, "reduce-motion", state.reduceMotion);
@@ -1808,7 +1748,7 @@
     );
     setClass(document.body, "logos-hidden", !state.showModelLogos);
   }
-  
+
   function applyPreset(name) {
     state.compatPreset = name;
     if (name === "maximum") {
@@ -1837,10 +1777,11 @@
     applyCompatibility();
     saveState();
   }
-  
+
   function syncStateFromInputs() {
     state.theme = byId("theme").value;
     state.saveChats = byId("save-chats").checked;
+    state.autoTools = byId("auto-tools").checked;
     state.showModelLogos = byId("show-model-logos").checked;
     state.systemPrompt = byId("system-prompt").value;
     state.hordeSafety = byId("horde-safety").checked;
@@ -1893,25 +1834,18 @@
     state.webSearchResultsCount = Math.round(
       clampNumber(byId("web-search-results-count").value, 5, 1, 10)
     );
-    state.wikipediaEnabled =
-      byId("wikipedia-enabled").checked;
-    
+    state.wikipediaEnabled = byId("wikipedia-enabled").checked;
+
     if (!state.wikipediaEnabled) {
       state.wikipediaToolActive = false;
     }
-    
-    state.wikipediaLanguage =
-      byId("wikipedia-language").value || "en";
-    
+
+    state.wikipediaLanguage = byId("wikipedia-language").value || "en";
+
     state.wikipediaResultsCount = Math.round(
-      clampNumber(
-        byId("wikipedia-results-count").value,
-        3,
-        1,
-        5
-      )
+      clampNumber(byId("wikipedia-results-count").value, 3, 1, 5)
     );
-    
+
     state.compatPreset = byId("compat-preset").value;
     state.maxCompatibility = byId("max-compatibility").checked;
     state.reduceMotion = byId("reduce-motion").checked;
@@ -1923,20 +1857,15 @@
     state.historyLimit = Math.round(
       clampNumber(byId("history-limit").value, 12, 2, 100)
     );
-    if (
-      window.TibUITools &&
-      window.TibUITools.weather
-    ) {
-      window.TibUITools.weather.updateUI();
-    }
-    updateWebToolUI();
+    window.TibUITools.updateUI();
     applyTheme();
     applyCompatibility();
   }
-  
+
   function fillSettings() {
     byId("theme").value = state.theme;
     byId("save-chats").checked = state.saveChats;
+    byId("auto-tools").checked = state.autoTools;
     byId("show-model-logos").checked = state.showModelLogos;
     byId("system-prompt").value = state.systemPrompt;
     byId("horde-safety").checked = state.hordeSafety;
@@ -1947,7 +1876,7 @@
     byId("horde-image-karras").checked = state.hordeImageKarras;
     byId("horde-image-seed").value = state.hordeImageSeed;
     window.TibUITools.imageControls.updateLabels();
-    
+
     byId("ollama-url").value = state.ollamaUrl;
     byId("ollama-model").value = state.ollamaModel;
     byId("ollama-temperature").value = state.ollamaTemperature;
@@ -1962,17 +1891,12 @@
     byId("web-search-relay").value = state.webSearchRelay;
     byId("web-search-instances").value = state.webSearchInstances.join("\n");
     byId("web-search-results-count").value = state.webSearchResultsCount;
-    byId("wikipedia-enabled").checked =
-      state.wikipediaEnabled;
-    
-    byId("wikipedia-language").value =
-      state.wikipediaLanguage;
-    
-    byId("wikipedia-results-count").value =
-      state.wikipediaResultsCount;
-    
-    window.TibUITools.wikipedia.updateUI();
-    
+    byId("wikipedia-enabled").checked = state.wikipediaEnabled;
+
+    byId("wikipedia-language").value = state.wikipediaLanguage;
+
+    byId("wikipedia-results-count").value = state.wikipediaResultsCount;
+
     byId("compat-preset").value = state.compatPreset;
     byId("max-compatibility").checked = state.maxCompatibility;
     byId("reduce-motion").checked = state.reduceMotion;
@@ -1980,37 +1904,27 @@
     byId("auto-model-refresh").checked = state.autoModelRefresh;
     byId("request-timeout").value = state.requestTimeout;
     byId("history-limit").value = state.historyLimit;
-    updateWebToolUI();
-    
-    if (
-      window.TibUITools &&
-      window.TibUITools.weather
-    ) {
-      window.TibUITools.weather.updateUI();
-    }
-    
+    window.TibUITools.updateUI();
   }
-  
+
   function updatePrivacy() {
     byId("privacy-label").innerHTML =
       "<span></span>" +
-      (state.saveChats ?
-        "Chats saved in a cookie" :
-        "Private session — not saved");
+      (state.saveChats
+        ? "Chats saved in a cookie"
+        : "Private session — not saved");
   }
-  
-  
-  
+
   function openMenu() {
     addClass(document.body, "menu-open");
     byId("menu-button").setAttribute("aria-expanded", "true");
   }
-  
+
   function closeMenu() {
     removeClass(document.body, "menu-open");
     byId("menu-button").setAttribute("aria-expanded", "false");
   }
-  
+
   function openSettings() {
     lastFocus = document.activeElement;
     fillSettings();
@@ -2019,7 +1933,7 @@
     closeMenu();
     byId("close-settings").focus();
   }
-  
+
   function closeSettings(save) {
     if (save) {
       syncStateFromInputs();
@@ -2031,7 +1945,7 @@
       lastFocus.focus();
     }
   }
-  
+
   function clearData() {
     state.chats = [];
     state.activeId = "";
@@ -2043,7 +1957,7 @@
     byId("settings-status").textContent =
       "Saved chats and cookie data cleared.";
   }
-  
+
   function trapModal(event) {
     var modal;
     var focusable;
@@ -2069,14 +1983,14 @@
       first.focus();
     }
   }
-  
+
   function updateViewport() {
     document.documentElement.style.setProperty(
       "--app-height",
       window.innerHeight + "px"
     );
   }
-  
+
   function bind() {
     byId("new-chat").onclick = newChat;
     byId("menu-button").onclick = openMenu;
@@ -2084,7 +1998,7 @@
     byId("scrim").onclick = closeMenu;
     byId("settings-button").onclick = openSettings;
     byId("settings-top").onclick = openSettings;
-    byId("theme-toggle").onclick = function() {
+    byId("theme-toggle").onclick = function () {
       var currentDark =
         state.theme === "dark" ||
         (state.theme === "system" &&
@@ -2094,24 +2008,24 @@
       applyTheme();
       saveState();
     };
-    byId("close-settings").onclick = function() {
+    byId("close-settings").onclick = function () {
       closeSettings(false);
     };
-    byId("done-settings").onclick = function() {
+    byId("done-settings").onclick = function () {
       closeSettings(true);
     };
-    byId("settings-modal").onclick = function(event) {
+    byId("settings-modal").onclick = function (event) {
       if (event.target === byId("settings-modal")) {
         closeSettings(true);
       }
     };
-    byId("provider").onchange = function() {
+    byId("provider").onchange = function () {
       updateProviderUI(true);
     };
     byId("model").onchange = onModelChange;
     byId("prompt-form").onsubmit = submitPrompt;
     byId("prompt-input").oninput = resizePrompt;
-    byId("prompt-input").onkeydown = function(event) {
+    byId("prompt-input").onkeydown = function (event) {
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         byId("prompt-form").dispatchEvent(
@@ -2120,33 +2034,33 @@
       }
     };
     byId("load-pollinations").onclick = loadPollinationsModels;
-    byId("load-horde-text").onclick = function() {
+    byId("load-horde-text").onclick = function () {
       loadHordeModels("text");
     };
-    byId("load-horde-image").onclick = function() {
+    byId("load-horde-image").onclick = function () {
       loadHordeModels("image");
     };
     byId("load-ollama").onclick = loadOllamaModels;
     byId("clear-data").onclick = clearData;
-    byId("theme").onchange = function() {
+    byId("theme").onchange = function () {
       state.theme = this.value;
       applyTheme();
     };
-    byId("show-model-logos").onchange = function() {
+    byId("show-model-logos").onchange = function () {
       state.showModelLogos = this.checked;
       applyCompatibility();
     };
-    byId("compat-preset").onchange = function() {
+    byId("compat-preset").onchange = function () {
       applyPreset(this.value);
     };
-    byId("max-compatibility").onchange = function() {
+    byId("max-compatibility").onchange = function () {
       if (this.checked) {
         applyPreset("maximum");
       } else if (byId("compat-preset").value === "maximum") {
         applyPreset("balanced");
       }
     };
-    document.onkeydown = function(event) {
+    document.onkeydown = function (event) {
       if (event.key === "Escape") {
         if (!byId("settings-modal").hidden) {
           closeSettings(true);
@@ -2159,8 +2073,9 @@
     window.addEventListener("resize", updateViewport, false);
     window.addEventListener("orientationchange", updateViewport, false);
   }
-  
+
   function init() {
+    window.TibUITools.prepare(state);
     loadState();
     state.requestTimeout = clampNumber(state.requestTimeout, 180, 30, 300);
     state.historyLimit = clampNumber(state.historyLimit, 12, 2, 100);
@@ -2172,45 +2087,46 @@
       state.activeId = state.chats[state.chats.length - 1].id;
     }
     updateViewport();
-    
-    window.TibUITools.webSearch.init({
+
+    window.TibUITools.init({
       state: state,
       byId: byId,
       stripSlash: stripSlash,
       requestJson: requestJson,
+      requestText: function (url) {
+        return requestJson("GET", url, null, null, true, 20);
+      },
       saveState: saveState,
       setClass: setClass,
       syncStateFromInputs: syncStateFromInputs,
-    });
-    
-    window.TibUITools.imageControls.init({
-      state: state,
-      byId: byId,
-      setClass: setClass,
-      refreshImageModels: function() {
+      refreshImageModels: function () {
         loadHordeModels("image");
       },
+      changeProvider: function (provider) {
+        if (sending) {
+          abortActive();
+        }
+        byId("provider").value = provider;
+        updateProviderUI(true);
+      }
     });
-    window.TibUITools.weather.init({
+    window.TibUIFiles.init({
       state: state,
       byId: byId,
-      requestJson: requestJson,
       saveState: saveState,
-      setClass: setClass,
+      makeId: makeId,
+      isSending: function () {
+        return sending;
+      },
+      refresh: function () {
+        renderChats();
+        renderMessages();
+      }
     });
-    
-    window.TibUITools.wikipedia.init({
-      state: state,
-      byId: byId,
-      requestJson: requestJson,
-      saveState: saveState,
-      setClass: setClass
-    });
-    
-    
+
     bind();
     fillSettings();
-    
+
     applyTheme();
     applyCompatibility();
     byId("provider").value = state.provider;
@@ -2228,6 +2144,6 @@
       loadHordeModels("image");
     }
   }
-  
-  init();
+
+  window.TibUITools.ready(init);
 })();
