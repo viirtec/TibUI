@@ -9,6 +9,7 @@ TibUI is a small, self-hostable AI frontend made from static HTML, CSS, and Java
 - Pollinations anonymous text models
 - Stable Horde / AI Horde text and image generation with live model, worker, queue, and ETA information
 - Stable Horde image controls in Settings, with optional safety filtering and repeatable seeds
+- Optional **Smart tools**, off by default: model-prepared tool queries, lookups, and a final answer using the results
 - A + tools menu with on/off switches generated from a modular tool registry, with enabled-tool buttons in the composer
 - Optional automatic tool selection in Settings, off by default
 - Live Open-Meteo weather and seven-day forecasts without an API key
@@ -222,6 +223,16 @@ Under **Settings → Privacy**, **Export chats** downloads all current chats as 
 
 Safari versions without download-attribute support may open the JSON instead; save the opened file using the browser's sharing or save controls. Import does not enable cookie storage. Large histories are best preserved using exports because cookie saving remains size-limited. Exported image URLs can expire at the provider; export does not download remote image bytes.
 
+## Smart tools
+
+Enable **Settings → Chat & experimental search → Smart tools** to add a planning step before tool lookups. It is off by default and independent of Automatic tool selection: manual switches or automatic matching still determine which tools run.
+
+The selected text model receives the original request and the selected tools' input instructions, then returns a JSON plan. Each search tool can run up to three short, distinct queries. Weather and currency use one canonical input; GitHub keeps its repository, issue, filename and file-reading syntax; research preserves exact DOIs and extracts available paper text. Wikipedia searches use its configured language. For example, an Estonian Wikipedia question such as `millal oli eestis laulev revolutsioon` can produce `laulev revolutsioon`, `eesti`, and `eesti iseseisvuse taastamine`. Results become reference context for the model's answer to the original question, with source links.
+
+Image generation uses the previous text provider to refine the image prompt before submitting it to Stable Horde, retaining the image settings. Planning requests are separate from chat history and exports. This adds one model request and can add search requests, latency, provider usage or queue time. Invalid plans or unavailable planning providers fall back to the original input with a status warning. Cancelling also stops the planning and lookup pipeline. Tool failures keep their existing required/optional behavior.
+
+Plans accept bounded input strings for registered tools only; the model cannot supply API endpoints or executable code. New context tools participate automatically with the existing `run(query, cancelled)` contract; a `planningHint` improves their input preparation.
+
 ## Adding tools
 
 Runtime code uses classic scripts, ES5 syntax, XMLHttpRequest, FileReader, and Promises supported by iOS 12 WebKit. It does not require modules, fetch, async functions, optional chaining, or a JavaScript framework. The browser cannot enumerate a static hosting directory, so a small Python script discovers all tool `.js` files and writes the checked-in loader manifest:
@@ -247,19 +258,34 @@ Add a file under `tools/`, register it, and regenerate the manifest. No changes 
   var options;
   window.TibUITools.register("example", {
     name: "Example",
+    planningHint: "Return concise topic keywords accepted by this search API.",
     activeKey: "exampleToolActive",
     contextTool: true,
-    init: function (context) { options = context; },
+    init: function (context) {
+      options = context;
+    },
     isActive: function () {
-      return options.state.exampleToolActive && options.state.provider !== "hordeImage";
+      return (
+        options.state.exampleToolActive &&
+        options.state.provider !== "hordeImage"
+      );
     },
     run: function (prompt) {
-      return options.requestJson("GET", "https://your-api.example/search?q=" + encodeURIComponent(prompt), null, null);
+      return options.requestJson(
+        "GET",
+        "https://your-api.example/search?q=" + encodeURIComponent(prompt),
+        null,
+        null
+      );
     },
-    formatContext: function (data) { return String(data.text || ""); }
+    formatContext: function (data) {
+      return String(data.text || "");
+    }
   });
 })(window);
 ```
+
+`planningHint` is optional tool-local guidance for Smart tools; without it the registry asks for concise search keywords. The shared planner returns `{ "tools": { "example": { "queries": ["topic keywords"] } } }`, validates and deduplicates queries, and executes each through `run(query, cancelled)` without changes to `app.js`. Mark a tool `required: true` when it needs one exact operation and failure must stop the request. `generationTool: true` tools receive one refined generation prompt.
 
 `matches(prompt)` optionally enables a tool for automatic selection without changing its manual switch. `run` returns a Promise; optional `results` rows contain `title`, `url`, and `content` for source display. Optional `shouldRun(prompt)` filters execution, `enabledKey` connects a Settings availability preference, `required` makes a lookup failure stop the request, and `setActive(value)` handles special switches such as image generation. Shared helpers include state, DOM lookup, request handling, and saving. Tool context is untrusted reference material and should be labeled accordingly. Keep tool code and APIs compatible with older Safari.
 
@@ -275,7 +301,7 @@ npm install --prefix .artifacts/test-deps playwright acorn prettier
 NODE_PATH="$PWD/.artifacts/test-deps/node_modules" node tests/ui.cjs
 ```
 
-The local suite checks ES5 syntax, provider requests, tools, paper-text extraction and fallbacks, attachments, chat transfer, code controls, cancellation, and layouts at 320, 375, 768, and 1440 px in Chromium and WebKit. Local screenshots and results are retained for development and excluded from Git. A clean GitHub checkout can be served directly without these helpers. Modern WebKit and ES5 checks do not replace physical iOS 12 testing; live provider availability is separate from mocked tests.
+The local suite checks ES5 syntax, provider requests, Smart tools planning across text providers, multilingual query preparation, plan validation and fallbacks, image prompt refinement, cancellation, tools, paper-text extraction and fallbacks, attachments, chat transfer, code controls, cancellation, and layouts at 320, 375, 768, and 1440 px in Chromium and WebKit. Local screenshots and results are retained for development and excluded from Git. A clean GitHub checkout can be served directly without these helpers. Modern WebKit and ES5 checks do not replace physical iOS 12 testing; live provider availability is separate from mocked tests.
 
 ## Project structure
 
@@ -300,7 +326,6 @@ screenshots/               Tracked README illustrations
 - You are only allowed to use code from TibUI for commercial or non-commercial projects and products if you cite and give credit to TibUI and ViirTec as mentioned above.
 
 - All projects that use code from TibUI must be published and served under the **GNU General Public License v3.0** license and must follow the terms and conditions of the license
-
 
 ## Credits
 

@@ -167,6 +167,8 @@
   }
   window.TibUITools.register("github", {
     name: "GitHub",
+    planningHint:
+      'Use "github repos KEYWORDS" for repositories, "github issues QUERY" for issues, "github files OWNER/REPO FILENAME" for filename lookup or "github file OWNER/REPO PATH" to read a known text file. Global code-content search requires authentication and is unavailable. Preserve exact repository and path identifiers.',
     activeKey: "githubToolActive",
     contextTool: true,
     init: function (context) {

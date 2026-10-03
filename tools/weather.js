@@ -323,6 +323,8 @@
 
   window.TibUITools.register("weather", {
     name: "Weather",
+    planningHint:
+      'Return one query "weather in CITY, COUNTRY". Resolve the requested location, omit date words from the location; the API returns current weather and seven forecast days. Do not guess an unspecified location.',
     activeKey: "weatherToolActive",
     enabledKey: "weatherEnabled",
     contextTool: true,

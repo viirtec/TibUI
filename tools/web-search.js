@@ -231,6 +231,8 @@
 
   window.TibUITools.register("webSearch", {
     name: "Web search",
+    planningHint:
+      "Generate up to three concise web search keyword queries preserving the question language, places and important dates.",
     activeKey: "webSearchToolActive",
     enabledKey: "webSearchEnabled",
     contextTool: true,
@@ -239,7 +241,9 @@
     matches: function (prompt) {
       return /\b(search the web|web search|search online)\b/i.test(prompt);
     },
-    run: runSearch,
+    run: function (query) {
+      return runSearch(query, false);
+    },
     formatContext: function (data) {
       return searchContext(data.results);
     },

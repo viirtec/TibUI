@@ -12,6 +12,7 @@
     theme: "dark",
     saveChats: false,
     autoTools: false,
+    smartTools: false,
     systemPrompt: "",
     pollinationsModel: "openai-fast",
     hordeTextModel: "",
@@ -1335,11 +1336,15 @@
     return filtered;
   }
 
-  function openAIRequest(url, model, webContext, headers) {
+  function openAIRequest(url, model, webContext, headers, messages) {
     return requestJson(
       "POST",
       url,
-      { model: model, messages: historyMessages(webContext), stream: false },
+      {
+        model: model,
+        messages: messages || historyMessages(webContext),
+        stream: false
+      },
       headers
     ).then(function (data) {
       if (!data.choices || !data.choices[0] || !data.choices[0].message) {
@@ -1349,7 +1354,7 @@
     });
   }
 
-  function ollamaRequest(webContext) {
+  function ollamaRequest(webContext, messages) {
     var options = {
       temperature: state.ollamaTemperature,
       top_p: state.ollamaTopP,
@@ -1363,7 +1368,7 @@
       stripSlash(state.ollamaUrl) + "/api/chat",
       {
         model: state.ollamaModel,
-        messages: historyMessages(webContext),
+        messages: messages || historyMessages(webContext),
         stream: false,
         keep_alive: state.ollamaKeepAlive,
         options: options
@@ -1385,8 +1390,8 @@
     return base + "/chat/completions";
   }
 
-  function hordePrompt(webContext) {
-    var messages = historyMessages(webContext);
+  function hordePrompt(webContext, suppliedMessages) {
+    var messages = suppliedMessages || historyMessages(webContext);
     var parts = [];
     var i;
     for (i = 0; i < messages.length; i += 1) {
@@ -1457,14 +1462,14 @@
       });
   }
 
-  function hordeRequest(kind, prompt, webContext) {
+  function hordeRequest(kind, prompt, webContext, messages) {
     var isText = kind === "text";
     var body;
     var dimensions;
     var imageParams;
     if (isText) {
       body = {
-        prompt: hordePrompt(webContext),
+        prompt: hordePrompt(webContext, messages),
         params: {
           n: 1,
           max_context_length: Math.max(1024, state.ollamaContext),
@@ -1517,32 +1522,35 @@
     });
   }
 
-  function providerRequest(prompt, webContext) {
+  function providerRequest(prompt, webContext, messages, provider) {
     var headers = {};
-    if (state.provider === "chat") {
+    provider = provider || state.provider;
+    if (provider === "chat") {
       return openAIRequest(
         "https://ch.at/v1/chat/completions",
         "gpt-4o",
         webContext,
-        null
+        null,
+        messages
       );
     }
-    if (state.provider === "pollinations") {
+    if (provider === "pollinations") {
       return openAIRequest(
         "https://text.pollinations.ai/openai",
         state.pollinationsModel,
         webContext,
-        null
+        null,
+        messages
       );
     }
-    if (state.provider === "hordeText") {
-      return hordeRequest("text", prompt, webContext);
+    if (provider === "hordeText") {
+      return hordeRequest("text", prompt, webContext, messages);
     }
-    if (state.provider === "hordeImage") {
+    if (provider === "hordeImage") {
       return hordeRequest("image", prompt, "");
     }
-    if (state.provider === "ollama") {
-      return ollamaRequest(webContext);
+    if (provider === "ollama") {
+      return ollamaRequest(webContext, messages);
     }
     if (byId("custom-key").value) {
       headers.Authorization = "Bearer " + byId("custom-key").value;
@@ -1551,7 +1559,8 @@
       customChatUrl(),
       state.customModel,
       webContext,
-      headers
+      headers,
+      messages
     );
   }
 
@@ -1655,7 +1664,7 @@
         byId("request-status").textContent =
           "Contacting " + providerLabel(state.provider) + "…";
         return providerRequest(
-          prompt +
+          (data.generationPrompt || prompt) +
             (state.provider === "hordeImage" && attachmentContext
               ? "\n\n" + attachmentContext
               : ""),
@@ -1782,6 +1791,7 @@
     state.theme = byId("theme").value;
     state.saveChats = byId("save-chats").checked;
     state.autoTools = byId("auto-tools").checked;
+    state.smartTools = byId("smart-tools").checked;
     state.showModelLogos = byId("show-model-logos").checked;
     state.systemPrompt = byId("system-prompt").value;
     state.hordeSafety = byId("horde-safety").checked;
@@ -1866,6 +1876,7 @@
     byId("theme").value = state.theme;
     byId("save-chats").checked = state.saveChats;
     byId("auto-tools").checked = state.autoTools;
+    byId("smart-tools").checked = state.smartTools;
     byId("show-model-logos").checked = state.showModelLogos;
     byId("system-prompt").value = state.systemPrompt;
     byId("horde-safety").checked = state.hordeSafety;
@@ -2093,6 +2104,16 @@
       byId: byId,
       stripSlash: stripSlash,
       requestJson: requestJson,
+      modelRequest: function (prompt) {
+        return providerRequest(
+          prompt,
+          "",
+          [{ role: "user", content: prompt }],
+          state.provider === "hordeImage"
+            ? state.previousTextProvider || "chat"
+            : state.provider
+        );
+      },
       requestText: function (url) {
         return requestJson("GET", url, null, null, true, 20);
       },

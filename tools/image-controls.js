@@ -10,6 +10,8 @@
   }
   window.TibUITools.register("imageControls", {
     name: "Image generation",
+    planningHint:
+      "Return one improved image-generation prompt preserving the requested subjects, style and constraints. Do not answer the user or add unrelated subjects.",
     generationTool: true,
     matches: function (prompt) {
       return /^(?:draw\s+|(?:generate|create|make)\s+(?:an?\s+)?(?:image|picture|illustration)\b)/i.test(

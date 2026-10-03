@@ -276,6 +276,8 @@
 
   window.TibUITools.register("research", {
     name: "Research",
+    planningHint:
+      "Search Crossref using concise academic topic keywords, preferably English. Preserve any exact DOI as the query. Available abstracts and open access paper text are extracted automatically; do not invent DOI identifiers.",
     activeKey: "researchToolActive",
     contextTool: true,
     init: function (context) {

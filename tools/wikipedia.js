@@ -152,6 +152,8 @@
 
   window.TibUITools.register("wikipedia", {
     name: "Wikipedia",
+    planningHint:
+      'Generate up to three concise article-topic searches in the configured Wikipedia language. For Estonian questions about the Singing Revolution on Estonian Wikipedia, possible searches are "laulev revolutsioon", "eesti", "eesti iseseisvuse taastamine". Avoid whole questions.',
     activeKey: "wikipediaToolActive",
     enabledKey: "wikipediaEnabled",
     contextTool: true,

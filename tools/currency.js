@@ -78,6 +78,8 @@
   }
   window.TibUITools.register("currency", {
     name: "Currency",
+    planningHint:
+      'Return one query in the exact form "convert 100 EUR to USD" using the requested amount and ISO currency codes. Do not change the amount or invent exchange rates.',
     activeKey: "currencyToolActive",
     contextTool: true,
     required: true,
