@@ -1,6 +1,6 @@
 # TibUI
 
-TibUI is a small, self-hostable AI frontend made from static HTML, CSS, and JavaScript. It has no build step, framework, server database, or required account. It is designed to remain usable on iOS 12, older mobile devices, and current browsers.
+TibUI is a small, self-hostable AI frontend made from static HTML, CSS, and JavaScript. It has no build step, framework, server database, or required account. It is designed to remain usable on old browsers like iOS 12+, other older HTML5 supported mobile devices, and current up to date browsers.
 
 ## Features
 
@@ -13,7 +13,6 @@ TibUI is a small, self-hostable AI frontend made from static HTML, CSS, and Java
 - Optional SearXNG web search using a same-origin relay or a direct browser connection
 - Anonymous sessions by default, with opt-in cookie chat storage
 - Deletable chat-history entries
-- Empty chats are reused instead of filling history with duplicate blank entries
 - Dark mode by default with a top-bar light/dark switch and a system-theme option
 - Compatibility presets and a maximum-compatibility mode
 - Model-company logos stored locally with no logo requests to third parties
@@ -176,6 +175,15 @@ style.css    Responsive light and dark layouts
 app.js       Providers, chats, search, and compatibility behavior
 icons/       Local model-company and GitHub SVG marks
 ```
+
+## Modifying and reusing TibUI code
+
+- When modifying, rebranding, or using code from TibUI, you MUST give credit to [ViirTec](https://viirtec.eu/) and have clearly visible and easily discoverable link to [TibUI GitHub repository](https://github.com/viirtec/TibUI) with the title "This project uses code from ViirTec's TibUI"
+
+- You are only allowed to use code from TibUI for commercial or non-commercial projects and products if you cite and give credit to TibUI and ViirTec as mentioned above.
+
+- All projects that use code from TibUI must be published and served under the **GNU General Public License v3.0** license and must follow the terms and conditions of the license
+
 
 ## Credits
 
