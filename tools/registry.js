@@ -235,7 +235,9 @@
         requiredSelection: manual(tool),
         instructions:
           tool.planningHint || "Prepare concise search keywords for this tool.",
-        maxQueries: tool.required || tool.generationTool || !expanded ? 1 : 3
+        maxQueries:
+          tool.maxQueries ||
+          (tool.required || tool.generationTool || !expanded ? 1 : 3)
       };
     });
     var instruction =
@@ -322,7 +324,7 @@
                   : []);
             var queries = [];
             if (values) {
-              values.slice(0, 3).forEach(function (query) {
+              values.slice(0, tool.maxQueries || 3).forEach(function (query) {
                 if (typeof query !== "string") {
                   return;
                 }
@@ -381,7 +383,7 @@
     var candidates = entries.filter(function (tool) {
       return available(tool) && (manual(tool) || options.state.autoTools);
     });
-    var result = { context: "", sources: [], warnings: [] };
+    var result = { context: "", sources: [], warnings: [], inspections: [] };
     registry.updateUI();
     return planTools(candidates, prompt, cancelled, result).then(
       function (plans) {
@@ -414,7 +416,31 @@
               result.generationPrompt = plans[tool.id]
                 ? plans[tool.id][0]
                 : prompt;
-              return;
+              var generationStarted = Date.now();
+              return Promise.resolve(
+                tool.prepareGeneration
+                  ? tool.prepareGeneration(
+                      result.generationPrompt,
+                      cancelled,
+                      result,
+                      prompt
+                    )
+                  : undefined
+              ).then(function () {
+                result.inspections.push({
+                  name: tool.name,
+                  query: result.generationPrompt,
+                  output:
+                    "Selected image model: " +
+                    options.state.hordeImageModel +
+                    "\nSize: " +
+                    options.state.hordeImageSize +
+                    "\nSteps: " +
+                    options.state.hordeImageSteps,
+                  sources: [],
+                  durationMs: Date.now() - generationStarted
+                });
+              });
             }
             if (tool.shouldRun && !tool.shouldRun(prompt)) {
               return;
@@ -430,6 +456,17 @@
                   }
                   options.byId("request-status").textContent =
                     "Using " + tool.name + "…";
+                  var inspection = {
+                    name: tool.name,
+                    query: query,
+                    output: "",
+                    sources: [],
+                    durationMs: 0
+                  };
+                  var started = Date.now();
+                  if (result.inspections.length < 20) {
+                    result.inspections.push(inspection);
+                  }
                   return Promise.resolve()
                     .then(function () {
                       return tool.run(query, cancelled);
@@ -439,6 +476,19 @@
                         throw new Error("Request cancelled.");
                       }
                       var context = tool.formatContext(data);
+                      inspection.output = String(context || "").substring(
+                        0,
+                        12000
+                      );
+                      inspection.durationMs = Date.now() - started;
+                      inspection.sources = (data.results || [])
+                        .slice(0, 30)
+                        .map(function (source) {
+                          return {
+                            title: String(source.title || "Source"),
+                            url: String(source.url || "")
+                          };
+                        });
                       if (!context && (!data.results || !data.results.length)) {
                         throw new Error("No useful results returned.");
                       }
@@ -469,6 +519,8 @@
                       ) {
                         throw new Error("Request cancelled.");
                       }
+                      inspection.output = error.message;
+                      inspection.durationMs = Date.now() - started;
                       lastError = error;
                     });
                 });
@@ -503,9 +555,14 @@
               });
           });
         });
-        return chain.then(function () {
-          return result;
-        });
+        return chain
+          .then(function () {
+            return result;
+          })
+          .catch(function (error) {
+            error.toolResults = result.inspections;
+            throw error;
+          });
       }
     );
   };

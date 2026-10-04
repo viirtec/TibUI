@@ -1745,6 +1745,10 @@ summary {
 }
 
 .attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: calc(100% - 8px);
+  min-width: 0;
   margin: 4px;
   padding: 6px 9px;
   border: 1px solid var(--line);
@@ -1752,6 +1756,38 @@ summary {
   background: var(--panel-soft);
   color: var(--text);
   font-size: 12px;
+}
+
+.attachment-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-status {
+  flex: 0 0 auto;
+  margin-left: 6px;
+  color: var(--muted);
+}
+
+.attachment-remove {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 20px;
+}
+
+.message-files {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: break-word;
 }
 
 .settings .image-control-row > label {
@@ -1934,5 +1970,187 @@ summary {
 
   .composer-spacer {
     display: none;
+  }
+}
+
+#chat-search,
+#folder-filter {
+  width: 100%;
+  min-width: 0;
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel-soft);
+  color: var(--text);
+}
+.folder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0 -3px 8px;
+}
+.folder-actions button {
+  margin: 3px;
+  padding: 5px 7px;
+  font-size: 11px;
+}
+.message-actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+.message-action {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 6px 8px;
+  min-height: 32px;
+}
+.message-action:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+.message-editor {
+  padding: 10px 0;
+  width: 100%;
+}
+.message-editor textarea,
+.message-editor input,
+.message-editor select {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  color: var(--text);
+  background: var(--panel-soft);
+}
+.chat-settings {
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 45;
+  width: 340px;
+  max-width: 100%;
+  padding: 18px;
+  overflow-y: auto;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.chat-settings-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.chat-settings h2 {
+  font-size: 18px;
+  margin: 0;
+}
+.chat-settings > label {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+.chat-settings > label.check-line {
+  display: flex;
+}
+.chat-settings label input:not([type="checkbox"]),
+.chat-settings label textarea,
+.chat-settings label select {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  margin-top: 6px;
+  border: 1px solid var(--line);
+  color: var(--text);
+  background: var(--panel-soft);
+}
+.chat-settings > button {
+  margin: 3px 0;
+}
+.chat-settings pre,
+.tool-inspector pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-height: 300px;
+  overflow: auto;
+  font-size: 12px;
+}
+.tool-inspector {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+.tool-inspector details {
+  margin: 8px 0 0 8px;
+}
+.tool-inspector summary {
+  cursor: pointer;
+}
+.tool-inspector a {
+  display: block;
+  overflow-wrap: break-word;
+}
+.context-meter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  font-size: 11px;
+  color: var(--muted);
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto 5px;
+  flex-wrap: wrap;
+}
+.context-meter progress {
+  width: 70px;
+  height: 6px;
+  margin-left: 8px;
+  accent-color: var(--accent);
+}
+.context-warning {
+  font-size: 12px;
+  color: var(--danger);
+  width: 100%;
+  max-width: 760px;
+  margin: 4px auto;
+}
+.paste-offer {
+  padding: 8px;
+  font-size: 12px;
+  border-top: 1px solid var(--line);
+}
+.paste-offer span {
+  display: block;
+  margin-bottom: 6px;
+  overflow-wrap: break-word;
+}
+.paste-offer button {
+  padding: 5px 8px;
+  margin: 2px;
+}
+.tools-menu {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+#chat-settings-button {
+  font-size: 12px;
+  padding: 6px 8px;
+}
+
+@media (min-width: 1100px) {
+  body.chat-settings-open main {
+    margin-right: 340px;
+  }
+}
+@media (max-width: 375px) {
+  .topbar-title {
+    left: 62px;
+    transform: none;
   }
 }

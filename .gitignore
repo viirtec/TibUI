@@ -5,8 +5,11 @@
 !/index.html
 !/style.css
 !/app.js
+!/README.md
+!/chat-workspace.js
 !/chat-files.js
 !/code-controls.js
+!/horde-models.js
 !/icons/
 /icons/*
 !/icons/*.svg

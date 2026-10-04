@@ -53,11 +53,16 @@
     visualEffects: false,
     autoModelRefresh: false,
     requestTimeout: 180,
+    autoTitles: true,
+    folders: [],
     historyLimit: 12
   };
   var pollinationsModels = [];
   var hordeTextModels = [];
   var hordeImageModels = [];
+  var liveHordeKey = "";
+  var liveHordeRecord = null;
+  var liveHordeTimer = null;
   var ollamaModels = [];
   var activeXhr = null;
   var activeTimer = null;
@@ -184,8 +189,22 @@
       encodeURIComponent(JSON.stringify(copy)).length > 3500 &&
       copy.chats.length
     ) {
-      if (copy.chats[0].messages && copy.chats[0].messages.length) {
-        copy.chats[0].messages.shift();
+      if (copy.chats[0].summary) {
+        delete copy.chats[0].summary;
+        delete copy.chats[0].summaryThrough;
+        copy.chats[0].contextMode = "recent";
+      } else if (copy.chats[0].messages && copy.chats[0].messages.length) {
+        var removed = copy.chats[0].messages.shift();
+        if (
+          copy.chats[0].summaryThrough &&
+          removed.kind !== "image" &&
+          !removed.error
+        ) {
+          copy.chats[0].summaryThrough = Math.max(
+            0,
+            copy.chats[0].summaryThrough - 1
+          );
+        }
       } else if (copy.chats.length > 1) {
         copy.chats.shift();
       } else {
@@ -222,8 +241,10 @@
   }
 
   function newChat() {
+    var selectedFolder = window.TibUIWorkspace.startChat();
     var current = activeChat();
     if (current && (!current.messages || !current.messages.length)) {
+      current.folder = selectedFolder;
       renderChats();
       renderMessages();
       closeMenu();
@@ -233,7 +254,12 @@
     if (sending) {
       abortActive();
     }
-    var chat = { id: makeId(), title: "New chat", messages: [] };
+    var chat = {
+      id: makeId(),
+      title: "New chat",
+      messages: [],
+      folder: selectedFolder
+    };
     state.chats.push(chat);
     state.activeId = chat.id;
     saveState();
@@ -255,6 +281,9 @@
 
   function renderChats() {
     window.TibUITools.syncChat();
+    if (window.TibUIWorkspace) {
+      window.TibUIWorkspace.update();
+    }
     var list = byId("chat-list");
     var i;
     var chat;
@@ -264,6 +293,9 @@
     list.innerHTML = "";
     for (i = state.chats.length - 1; i >= 0; i -= 1) {
       chat = state.chats[i];
+      if (window.TibUIWorkspace && !window.TibUIWorkspace.matches(chat)) {
+        continue;
+      }
       entry = document.createElement("div");
       entry.className = "chat-entry";
       button = document.createElement("button");
@@ -672,6 +704,7 @@
     var chat = activeChat();
     var list = byId("messages");
     var welcome = byId("welcome");
+    window.TibUIWorkspace.update();
     var i;
     var message;
     var row;
@@ -705,7 +738,14 @@
       } else {
         renderText(bubble, message.content);
       }
+      if (message.attachmentNames && message.attachmentNames.length) {
+        var files = document.createElement("div");
+        files.className = "message-files";
+        files.textContent = "Files: " + message.attachmentNames.join(", ");
+        bubble.appendChild(files);
+      }
       appendSources(bubble, message.sources);
+      window.TibUIWorkspace.inspector(bubble, message.toolResults);
       var actions;
       var copyButton;
 
@@ -728,6 +768,7 @@
       })(message.content, copyButton);
 
       actions.appendChild(copyButton);
+      window.TibUIWorkspace.addActions(actions, chat, i);
 
       var body = document.createElement("div");
       body.className = "message-body";
@@ -835,25 +876,71 @@
     return null;
   }
 
-  function updateModelMeta() {
-    var meta = "";
-    var record;
-    if (state.provider === "hordeText") {
-      record = currentHordeRecord(hordeTextModels, state.hordeTextModel);
-    } else if (state.provider === "hordeImage") {
-      record = currentHordeRecord(hordeImageModels, state.hordeImageModel);
+  function refreshLiveHorde() {
+    if (liveHordeTimer) {
+      window.clearTimeout(liveHordeTimer);
     }
-    if (record) {
-      meta =
-        Number(record.count || 0) +
+    var key = liveHordeKey;
+    var name = currentModel();
+    if (!key) {
+      return;
+    }
+    function schedule() {
+      if (key === liveHordeKey) {
+        liveHordeTimer = window.setTimeout(refreshLiveHorde, 30000);
+      }
+    }
+    if (document.hidden || sending) {
+      schedule();
+      return;
+    }
+    window.TibUIHordeModels.live(name)
+      .then(function (data) {
+        if (key !== liveHordeKey) {
+          return;
+        }
+        liveHordeRecord = currentHordeRecord(data, name);
+        updateModelMeta();
+      })
+      .catch(function () {
+        if (key === liveHordeKey) {
+          liveHordeRecord = null;
+          byId("model-meta").textContent = "Live queue unavailable";
+        }
+      })
+      .then(schedule);
+  }
+
+  function updateModelMeta() {
+    var key =
+      state.provider === "hordeText" || state.provider === "hordeImage"
+        ? state.provider + ":" + currentModel()
+        : "";
+    if (key !== liveHordeKey) {
+      liveHordeKey = key;
+      liveHordeRecord = null;
+      if (liveHordeTimer) {
+        window.clearTimeout(liveHordeTimer);
+        liveHordeTimer = null;
+      }
+      if (key) {
+        refreshLiveHorde();
+      }
+    }
+    var record = liveHordeRecord;
+    byId("model-meta").textContent = record
+      ? Number(record.count || 0) +
         " worker" +
         (Number(record.count || 0) === 1 ? "" : "s") +
         " · Queue: " +
-        Number(record.queued || 0) +
+        Number(
+          typeof record.jobs === "number" ? record.jobs : record.queued || 0
+        ) +
         " · " +
-        etaText(record.eta);
-    }
-    byId("model-meta").textContent = meta;
+        etaText(record.eta)
+      : key
+        ? "Loading live queue…"
+        : "";
     updateModelLogo();
   }
 
@@ -987,6 +1074,7 @@
     }
     select.disabled = state.provider === "chat";
     updateModelMeta();
+    window.TibUIWorkspace.update();
   }
 
   function onModelChange() {
@@ -1198,7 +1286,7 @@
     );
   }
 
-  function loadHordeModels(type) {
+  function loadHordeModels(type, force) {
     var isText = type === "text";
     var button = byId(isText ? "load-horde-text" : "load-horde-image");
     var info = byId(
@@ -1207,12 +1295,7 @@
     button.disabled = true;
     button.textContent = "Loading…";
     info.textContent = "Loading live worker information…";
-    requestJson(
-      "GET",
-      HORDE_API + "/status/models?type=" + encodeURIComponent(type),
-      null,
-      null
-    )
+    return window.TibUIHordeModels.load(type, force)
       .then(function (data) {
         var list = Array.isArray(data) ? data : [];
         var clean = [];
@@ -1227,8 +1310,14 @@
           clean.push({
             name: list[i].name,
             count: Number(list[i].count || 0),
-            eta: Number(list[i].eta || 0),
+            eta: typeof list[i].eta === "number" ? list[i].eta : null,
             queued: Number(list[i].queued || 0),
+            jobs: Number(
+              typeof list[i].jobs === "number"
+                ? list[i].jobs
+                : list[i].queued || 0
+            ),
+            description: String(list[i].description || "").substring(0, 500),
             performance: Number(list[i].performance || 0)
           });
         }
@@ -1256,9 +1345,12 @@
         }
         info.textContent = clean.length
           ? clean.length +
-            " live models. Worker count and ETA update whenever this list is refreshed."
+            " available models. Model lists are reused for two minutes; the composer queue updates separately."
           : "No compatible workers are currently available.";
         rebuildModelSelect();
+        if (force && liveHordeKey) {
+          refreshLiveHorde();
+        }
         saveState();
       })
       .catch(function (error) {
@@ -1269,6 +1361,7 @@
         button.textContent = isText
           ? "Refresh text models"
           : "Refresh image models";
+        return isText ? hordeTextModels : hordeImageModels;
       });
   }
 
@@ -1309,22 +1402,28 @@
 
   function historyMessages(webContext, plain) {
     var chat = activeChat();
-    var history = chat
-      ? chat.messages.filter(function (message) {
-          return message.kind !== "image" && !message.error;
-        })
-      : [];
+    var history = window.TibUIWorkspace.history(chat);
     var filtered = [];
     var start;
     var i;
     var system = plain ? "" : String(state.systemPrompt || "").trim();
     var content;
+    var chatSystem = window.TibUIWorkspace.system(chat);
+    if (!plain && chatSystem) {
+      system += (system ? "\n\n" : "") + chatSystem;
+    }
+    if (plain && chat && chat.contextMode === "summary" && chat.summary) {
+      filtered.push({
+        role: "system",
+        content: "Summary of previous conversation: " + chat.summary
+      });
+    }
 
     if (webContext) {
       system += (system ? "\n\n" : "") + webContext;
     }
 
-    start = Math.max(0, history.length - state.historyLimit);
+    start = 0;
 
     for (i = start; i < history.length; i += 1) {
       content =
@@ -1591,6 +1690,9 @@
     byId("prompt-input").disabled = value;
     byId("provider").disabled = value;
     byId("model").disabled = value;
+    if (!value && liveHordeKey) {
+      refreshLiveHorde();
+    }
   }
 
   function abortActive() {
@@ -1616,25 +1718,44 @@
     byId("request-status").textContent = "Request cancelled.";
   }
 
-  function submitPrompt(event) {
+  function auxiliaryRequest(prompt) {
+    return providerRequest(
+      prompt,
+      "",
+      [{ role: "user", content: prompt }],
+      state.provider === "hordeImage"
+        ? state.previousTextProvider || "chat"
+        : state.provider
+    );
+  }
+
+  function submitPrompt(event, existing) {
     var prompt;
     var chat;
     var version;
     var warnings = [];
     var sources = [];
     var context = "";
+    var inspections = [];
 
     event.preventDefault();
     if (sending) {
       abortActive();
       return;
     }
+    if (window.TibUIWorkspace.busy()) {
+      byId("request-status").textContent =
+        "Wait for the chat title or summary request to finish.";
+      return;
+    }
     syncStateFromInputs();
-    if (window.TibUIFiles.isReading()) {
+    if (!existing && window.TibUIFiles.isReading()) {
       byId("request-status").textContent = "Wait for files to finish loading.";
       return;
     }
-    prompt = byId("prompt-input").value.replace(/^\s+|\s+$/g, "");
+    prompt = existing
+      ? activeChat().messages[activeChat().messages.length - 1].content
+      : byId("prompt-input").value.replace(/^\s+|\s+$/g, "");
     if (!prompt) {
       return;
     }
@@ -1651,16 +1772,24 @@
       newChat();
       chat = activeChat();
     }
-    var attachmentContext = window.TibUIFiles.consume();
-    chat.messages.push({
-      role: "user",
-      content: prompt,
-      attachmentContext: attachmentContext
-    });
+    var attachmentNames = existing ? [] : window.TibUIFiles.names();
+    var attachmentContext = existing
+      ? chat.messages[chat.messages.length - 1].attachmentContext || ""
+      : window.TibUIFiles.consume();
+    if (!existing) {
+      chat.messages.push({
+        role: "user",
+        content: prompt,
+        attachmentContext: attachmentContext,
+        attachmentNames: attachmentNames
+      });
+    }
     if (chat.title === "New chat") {
       chat.title = prompt.substring(0, 48);
     }
-    byId("prompt-input").value = "";
+    if (!existing) {
+      byId("prompt-input").value = "";
+    }
     resizePrompt();
     renderChats();
     renderMessages();
@@ -1673,6 +1802,7 @@
         if (version !== requestVersion) {
           throw new Error("Request cancelled.");
         }
+        inspections = data.inspections || [];
         sources = data.sources;
         warnings = data.warnings;
         context = data.context;
@@ -1696,13 +1826,17 @@
           kind: state.provider === "hordeImage" ? "image" : "text",
           alt: state.provider === "hordeImage" ? prompt : "",
           label: providerLabel(state.provider),
-          sources: sources
+          sources: sources,
+          toolResults: inspections
         });
 
         byId("request-status").textContent = warnings.join(" ");
 
         saveState();
         renderMessages();
+        return window.TibUIWorkspace.title(chat, function () {
+          return version !== requestVersion;
+        });
       })
 
       .catch(function (error) {
@@ -1714,6 +1848,7 @@
             role: "assistant",
             content: error.message,
             error: true,
+            toolResults: error.toolResults || inspections,
             label: providerLabel(state.provider)
           });
 
@@ -1737,6 +1872,7 @@
     var input = byId("prompt-input");
     input.style.height = "38px";
     input.style.height = Math.min(170, input.scrollHeight) + "px";
+    window.TibUIWorkspace.meter();
   }
 
   function applyTheme() {
@@ -2067,10 +2203,10 @@
     };
     byId("load-pollinations").onclick = loadPollinationsModels;
     byId("load-horde-text").onclick = function () {
-      loadHordeModels("text");
+      loadHordeModels("text", true);
     };
     byId("load-horde-image").onclick = function () {
-      loadHordeModels("image");
+      loadHordeModels("image", true);
     };
     byId("load-ollama").onclick = loadOllamaModels;
     byId("clear-data").onclick = clearData;
@@ -2133,22 +2269,26 @@
       getConversation: function () {
         return historyMessages("", true);
       },
-      modelRequest: function (prompt) {
-        return providerRequest(
-          prompt,
-          "",
-          [{ role: "user", content: prompt }],
-          state.provider === "hordeImage"
-            ? state.previousTextProvider || "chat"
-            : state.provider
-        );
-      },
+      modelRequest: auxiliaryRequest,
       requestText: function (url) {
         return requestJson("GET", url, null, null, true, 20);
       },
       saveState: saveState,
       setClass: setClass,
       syncStateFromInputs: syncStateFromInputs,
+      getImageModels: function () {
+        return window.TibUIHordeModels.load("image", true).then(function () {
+          return loadHordeModels("image", false);
+        });
+      },
+      selectImageModel: function (name) {
+        state.hordeImageModel = name;
+        rebuildModelSelect();
+        if (sending) {
+          byId("model").disabled = true;
+        }
+        saveState();
+      },
       refreshImageModels: function () {
         loadHordeModels("image");
       },
@@ -2177,6 +2317,83 @@
       }
     });
 
+    window.TibUIWorkspace.init({
+      state: state,
+      byId: byId,
+      getChat: activeChat,
+      saveState: saveState,
+      makeId: makeId,
+      modelRequest: auxiliaryRequest,
+      cancelAuxiliary: abortActive,
+      isSending: function () {
+        return sending;
+      },
+      cancel: function () {
+        if (sending) {
+          abortActive();
+        }
+      },
+      renderChats: renderChats,
+      refresh: function () {
+        renderChats();
+        renderMessages();
+      },
+      resend: function () {
+        submitPrompt({ preventDefault: function () {} }, true);
+      },
+      models: function (provider) {
+        var values =
+          provider === "pollinations"
+            ? pollinationsModels.map(function (m) {
+                return m.name;
+              })
+            : provider === "hordeText"
+              ? hordeTextModels.map(function (m) {
+                  return m.name;
+                })
+              : provider === "hordeImage"
+                ? hordeImageModels.map(function (m) {
+                    return m.name;
+                  })
+                : provider === "ollama"
+                  ? ollamaModels
+                  : [];
+        var current =
+          provider === "pollinations"
+            ? state.pollinationsModel
+            : provider === "hordeText"
+              ? state.hordeTextModel
+              : provider === "hordeImage"
+                ? state.hordeImageModel
+                : provider === "ollama"
+                  ? state.ollamaModel
+                  : provider === "custom"
+                    ? state.customModel
+                    : "gpt-4o";
+        return [current].concat(
+          values.filter(function (name) {
+            return name !== current;
+          })
+        );
+      },
+      chooseModel: function (provider, model) {
+        state.provider = provider;
+        var keys = {
+          pollinations: "pollinationsModel",
+          hordeText: "hordeTextModel",
+          hordeImage: "hordeImageModel",
+          ollama: "ollamaModel",
+          custom: "customModel"
+        };
+        if (keys[provider] && model) {
+          state[keys[provider]] = model;
+        }
+        fillSettings();
+        byId("provider").value = provider;
+        updateProviderUI(false);
+        saveState();
+      }
+    });
     bind();
     fillSettings();
 

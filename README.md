@@ -15,7 +15,7 @@ TibUI is a small, self-hostable AI frontend made from static HTML, CSS, and Java
 - Live Open-Meteo weather and seven-day forecasts without an API key
 - Wikipedia lookup in six languages
 - Keyless GitHub repository and issue search, repository filename lookup, and text-file reading
-- Experimental text attachments (.txt, .json, .md, .csv, .log, .xml, .yaml, .yml)
+- Experimental text attachments with filename previews and removal before sending (.txt, .json, .md, .csv, .log, .xml, .yaml, .yml)
 - Individual chat export and selective JSON chat import, including images, sources, and attached text
 - Keyless Frankfurter currency conversion using the latest daily reference rate
 - Crossref research-paper search and DOI metadata lookup, with abstracts and accessible Europe PMC article text
@@ -23,6 +23,17 @@ TibUI is a small, self-hostable AI frontend made from static HTML, CSS, and Java
 - Local Ollama model discovery and generation controls
 - Optional SearXNG web search using a same-origin relay or a direct browser connection
 - Anonymous sessions by default, with opt-in cookie chat storage
+- Searchable chat history and named folders
+- AI-generated chat titles after the first answer, with manual renaming and an opt-out
+- Conversation branches, edit-and-resend, and regeneration with the current or another model
+- Per-chat system prompts and context controls in the right-hand Chat settings panel
+- Approximate context usage, recent messages, entire conversation, and older-message summaries
+- Large pasted text and supported clipboard files can be approved as attachments
+- Collapsible tool results with queries, normalized output, timing, and source links
+- Open Food Facts product names, barcodes, ingredients, allergens, and nutrition
+- OpenStreetMap nearby places via Overpass, with addresses and mapped opening hours
+- TheMealDB recipes, ingredients, measurements, instructions, cuisine, and image links
+- Latest-news searches through keyless FreeNewsAPI.ai
 - Deletable chat-history entries
 - Dark mode by default with a top-bar light/dark switch and a system-theme option
 - Compatibility presets and a maximum-compatibility mode
@@ -36,9 +47,30 @@ Provider, model, and send controls share one compact toolbar below the message b
 
 Turn on **Image generation** to select Stable Horde images. Turning it off returns to the previous text provider. Image settings are always available under **Settings → Image generation**; choosing Horde images directly remains supported. Text lookup tools are unavailable while generating images.
 
-![TibUI tools menu](screenshots/tibui-v2-desktop.png)
+## Conversations and context
 
-![Image settings on a 320 px phone](screenshots/tibui-v2-iphone-se-settings.png)
+Use **Search chats** to search titles, message text, and attached filenames. Create folders in the history menu, assign the current chat under **Chat settings → Folder**, and filter history by folder. Rename and remove controls apply to the selected folder; removing a folder keeps its chats.
+
+Message actions appear beside Copy. **Branch** starts a separate chat containing messages through that point. **Edit → Resend** and **Regenerate** create a new branch and retain the original chat. **Other model** lets you choose a provider and model before regenerating; configured provider credentials and connection settings still apply. Pending composer text and attachments remain available when regenerating.
+
+**Chat settings**, in the top bar, opens a right-hand panel for the current title, folder, extra system instructions, and context. AI titles are generated after the first successful answer; turn off **Automatic AI titles** to use the first message as the title. Titles and summaries use the chosen text provider, including the previous text provider when generating images. A failed title request keeps the initial title.
+
+**Entire conversation** sends all supported text messages. **Recent messages** sends the configured number, which defaults to the global history limit. **Recent + summary** combines a stored summary with recent messages and any newer messages not yet summarized. **Summarize older messages** asks the text model to summarize the older portion; it preserves the actual messages in history. Summaries can lose detail. Regenerate the summary as the chat grows, or clear it to discard it. Summarization reports when its input exceeds the configured estimate rather than silently omitting older content.
+
+The composer estimates tokens as characters divided by four and warns at 85% of the configured limit. This covers selected conversation text, instructions, summary, pending text, and attachments; tokenizer differences, provider formatting, and newly fetched tool results can increase actual usage. Ollama uses its **Context** setting. Set an approximate limit for other providers in Chat settings; this does not change their server limits. No messages are automatically discarded to meet that estimate.
+
+Large pasted text prompts an attachment offer instead of filling the message box. Approve **Attach** to add `pasted-text.txt`, or cancel. Pasted supported text files use the same approval and size limits as file uploads. **Paste as text** is available when the content fits the composer.
+
+Chat JSON export/import preserves folders, per-chat instructions, context settings, summaries, attached text, and normalized tool inspection records. Cookie storage remains optional and size-limited; a summary that does not fit is omitted from the saved cookie and that saved chat uses recent messages. Use JSON exports to keep complete conversations.
+
+## Food, recipes, places, and news
+
+Enable these tools in **+**, or let Automatic tool selection choose them. Like the other tools, each uses the shared conversation-aware planner and displays its lookup in **Used tools** under the answer. Tool text is treated as untrusted reference material; the inspector shows normalized, bounded output rather than arbitrary API payloads.
+
+- **Food info** searches [Open Food Facts](https://openfoodfacts.github.io/openfoodfacts-server/api/) by product/brand or barcode. It supplies ingredients, declared allergens, nutrition per 100 g, Nutri-Score and NOVA values when present. Data is crowdsourced under ODbL and may be incomplete; missing allergen data does not imply allergen absence. Product lookups are temporarily reused for five minutes.
+- **Recipes** uses [TheMealDB](https://www.themealdb.com/docs_api_guide.php) public test key `1`, without signup or a private key. Search a dish, filter by one ingredient, request a specific meal ID, or ask for inspiration. Ingredient searches fetch full recipe details for up to three meals. Results include instructions, ingredient measurements, category, cuisine, and image/source links. TheMealDB recommends a supporter key for publicly shipped apps; key `1` is its public testing/personal-project access. Recipes are attributed to TheMealDB and temporarily reused for five minutes.
+- **Places** searches [OpenStreetMap via Overpass](https://wiki.openstreetmap.org/wiki/Overpass_API) around a named city or user-supplied coordinates, using Open-Meteo city lookup. It returns up to 20 mapped places within 100–10,000 meters, with source links, addresses, cuisine, coordinates, and opening hours when mapped. The tool tries a second documented public Overpass endpoint if the first request fails, with a 25-second timeout for each. Successful searches are reused for five minutes. No location permission is requested. OpenStreetMap contributors provide the data under ODbL; coverage and hours may be outdated.
+- **Latest news** uses [FreeNewsAPI.ai](https://freenewsapi.ai/docs), which documents no key, signup, or authentication header and supports browser CORS. Results are sorted by publication date and can be filtered by topic, language, country, and start date. Responses include publisher links, dates, and article summaries. Searches are temporarily reused for one minute. News coverage is incomplete and publisher claims are not independently verified.
 
 ## Providers
 
@@ -62,7 +94,7 @@ python3 -m http.server 8080
 
 Open `http://localhost:8080`.
 
-Any static web server works. Upload `index.html`, `style.css`, `app.js`, `chat-files.js`, `code-controls.js`, `tools/`, and `icons/` together. No compilation is required.
+Any static web server works. Upload `index.html`, `style.css`, `app.js`, `chat-files.js`, `code-controls.js`, `horde-models.js`, `chat-workspace.js`, `tools/`, and `icons/` together. No compilation is required.
 
 ## Privacy and storage
 
@@ -144,16 +176,6 @@ server:
 
 Review your SearXNG version's configuration documentation and restrict access appropriately. A wildcard CORS policy may expose a private instance to unwanted public use.
 
-### Public-instance audit
-
-These endpoints were checked on 2026-10-01. Public instance behavior changes, so they are candidates rather than uptime guarantees.
-
-| Endpoint                            | JSON | Browser CORS | Observed result                                                              |
-| ----------------------------------- | ---- | ------------ | ---------------------------------------------------------------------------- |
-| `https://severian-searxng.hf.space` | Yes  | Yes          | Browser-readable, but its upstream engines often returned no general results |
-
-The public SearXNG directory had no instance that simultaneously demonstrated dependable general results, JSON output, and browser CORS during the audit. Self-hosting with a same-origin relay is the reliable setup.
-
 ## Compatibility presets
 
 | Preset                | Behavior                                                                                |
@@ -166,7 +188,11 @@ Maximum compatibility is enabled by default. Model-company logos can be disabled
 
 ## Stable Horde models
 
-TibUI reads live text and image model data from the AI Horde status API. Models are ordered by available workers. Worker count, queue count, and estimated wait time appear in a separate row beneath the compact model selector so that the information stays visible on desktop and mobile. Refresh the model list to update these figures.
+TibUI reads text and image model data from the AI Horde status API. Model lists are reused in memory for two minutes and concurrent lookups share one request, so reopening menus does not repeatedly fetch the list. **Refresh models** bypasses this cache. Failed background list requests wait briefly before retrying. Nothing is cached across page reloads.
+
+The composer reads the selected model’s live worker, queue and estimated wait data separately, refreshing every 30 seconds while visible and idle. Active generation queue position and remaining ETA continue to update through job polling. These live responses are not stored in the model-list cache.
+
+With **Automatic tool selection** enabled, image requests also select a model automatically. AI identifies the best matching active models for the requested subject and style; TibUI chooses the shortest reported queue-clearance ETA among those models, then uses queued jobs and available workers as tie breakers. Models without workers and models hidden by the safety setting are excluded. An explicitly requested available model is preferred. If selection fails, TibUI reports the fallback in the status line. Queue estimates can change before the job runs.
 
 The **Image generation** section in Settings configures Stable Horde image requests, regardless of which provider is currently selected. It uses plain-language labels and touch-friendly sliders for shape, drawing method, detail passes, prompt strength, smoother detail, optional safety filtering, and a repeatable seed. Larger dimensions and more detail passes generally increase queue and generation time.
 
@@ -219,6 +245,8 @@ Fenced code blocks (backticks or tildes), including an unfinished final fence, h
 
 ## Text attachments and chat transfer
 
+Selected files appear by filename beneath the prompt immediately, including while being read. Use the **×** button next to any unsent file to remove it; a file removed while loading will not return. Long filenames remain readable through their full-name tooltip. Sent filenames appear with the message and are preserved by chat export/import.
+
 Use **+ → Attach text files (experimental)** to select up to five files totaling 100 KB. Click a file chip to remove it before sending. Text is read with FileReader; TibUI does not upload files to a storage service. Attached text is included with the next message and preserved in conversation context and chat exports. For image generation it is appended to the image prompt. Binary files and larger documents are unsupported.
 
 Under **Settings → Privacy**, **Export chats** downloads all current chats as `tibui-chats.json`; **Export current chat** downloads the active conversation as `tibui-chat.json`. **Import chats** validates either format and presents a checkbox list. Choose one or more chats and click **Import selected chats** to add only those conversations with new IDs, retaining existing chats. Cancel leaves the history untouched. Imports support version 1 exports, files under 10 MB, up to 200 chats and 20,000 messages. Malformed imports leave existing chats untouched. Exported JSON contains conversation contents and attached text, but no API keys or provider settings.
@@ -251,8 +279,6 @@ Path("tools/manifest.js").write_text(
     "window.TibUIToolFiles = " + json.dumps(files, indent=2) + ";\n")
 PYTOOLS
 ```
-
-The ignored local helper `scripts/discover-tools.py` performs the same discovery on the development machine. It is not required to serve the site.
 
 Add a file under `tools/`, register it, and regenerate the manifest. No changes to `app.js` or `index.html` are needed. Files load sequentially; registry and manifest files are excluded from discovery. Register a uniquely named tool using this contract:
 
@@ -301,12 +327,12 @@ style.css                  Responsive light and dark layouts
 app.js                     Providers, chats, and compatibility behavior
 chat-files.js              Text attachments and selective JSON chat transfer
 code-controls.js           Copy, download, and wrap for code blocks
+chat-workspace.js          Chat actions, folders, prompts, and context controls
+horde-models.js            Temporary model-list cache and live model status
 tools/registry.js          Generic loader, switches, and execution pipeline
 tools/manifest.js          Discovered tool filenames
 tools/*.js                 Self-registering tools
 icons/                     Local model-company and GitHub SVG marks
-screenshots/               Tracked README illustrations
-.gitignore                 Excludes local development and testing files
 ```
 
 ## Modifying and reusing TibUI code
