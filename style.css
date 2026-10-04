@@ -1612,13 +1612,18 @@ summary {
   position: relative;
 }
 
+.message-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .message-actions {
   display: flex;
   flex: 0 0 auto;
-  align-items: flex-start;
-  margin-top: 22px;
-  margin-left: 7px;
-  opacity: 0;
+  align-items: center;
+  margin-top: 6px;
+  margin-left: 0;
+  opacity: 1;
   transition: opacity 0.15s ease;
 }
 
@@ -1650,12 +1655,6 @@ summary {
 
 .message-copy:active {
   background: var(--hover);
-}
-
-.user .message-actions {
-  order: -1;
-  margin-right: 7px;
-  margin-left: 0;
 }
 
 @media (hover: none) {

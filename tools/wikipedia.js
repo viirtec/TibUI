@@ -159,9 +159,6 @@
     contextTool: true,
     init: init,
     isActive: isActive,
-    matches: function (prompt) {
-      return /\b(wikipedia|wiki)\b/i.test(prompt);
-    },
     run: run,
     formatContext: formatContext
   });

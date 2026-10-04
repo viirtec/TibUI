@@ -230,6 +230,9 @@
       byId("prompt-input").focus();
       return;
     }
+    if (sending) {
+      abortActive();
+    }
     var chat = { id: makeId(), title: "New chat", messages: [] };
     state.chats.push(chat);
     state.activeId = chat.id;
@@ -251,6 +254,7 @@
   }
 
   function renderChats() {
+    window.TibUITools.syncChat();
     var list = byId("chat-list");
     var i;
     var chat;
@@ -284,6 +288,12 @@
   }
 
   function selectChat(event) {
+    if (
+      sending &&
+      state.activeId !== event.currentTarget.getAttribute("data-chat-id")
+    ) {
+      abortActive();
+    }
     state.activeId = event.currentTarget.getAttribute("data-chat-id");
     saveState();
     renderChats();
@@ -305,6 +315,9 @@
     }
     if (index < 0) {
       return;
+    }
+    if (sending && state.activeId === id) {
+      abortActive();
     }
     state.chats.splice(index, 1);
     if (!state.chats.length) {
@@ -716,9 +729,12 @@
 
       actions.appendChild(copyButton);
 
+      var body = document.createElement("div");
+      body.className = "message-body";
+      body.appendChild(bubble);
+      body.appendChild(actions);
       row.appendChild(label);
-      row.appendChild(bubble);
-      row.appendChild(actions);
+      row.appendChild(body);
       list.appendChild(row);
     }
     scrollConversation();
@@ -1291,13 +1307,17 @@
       });
   }
 
-  function historyMessages(webContext) {
+  function historyMessages(webContext, plain) {
     var chat = activeChat();
-    var history = chat ? chat.messages : [];
+    var history = chat
+      ? chat.messages.filter(function (message) {
+          return message.kind !== "image" && !message.error;
+        })
+      : [];
     var filtered = [];
     var start;
     var i;
-    var system = String(state.systemPrompt || "").trim();
+    var system = plain ? "" : String(state.systemPrompt || "").trim();
     var content;
 
     if (webContext) {
@@ -1307,16 +1327,12 @@
     start = Math.max(0, history.length - state.historyLimit);
 
     for (i = start; i < history.length; i += 1) {
-      if (history[i].kind === "image" || history[i].error) {
-        continue;
-      }
-
       content =
         history[i].content +
         (history[i].attachmentContext
           ? "\n\n" + history[i].attachmentContext
           : "");
-      if (history[i].role === "user" && system) {
+      if (history[i].role === "user" && system && i === history.length - 1) {
         filtered.push({
           role: "user",
           content:
@@ -1622,7 +1638,6 @@
     if (!prompt) {
       return;
     }
-    window.TibUITools.preparePrompt(prompt);
     if (
       (state.provider === "hordeText" && !state.hordeTextModel) ||
       (state.provider === "hordeImage" && !state.hordeImageModel)
@@ -1792,6 +1807,7 @@
     state.saveChats = byId("save-chats").checked;
     state.autoTools = byId("auto-tools").checked;
     state.smartTools = byId("smart-tools").checked;
+    byId("smart-tools").disabled = state.autoTools;
     state.showModelLogos = byId("show-model-logos").checked;
     state.systemPrompt = byId("system-prompt").value;
     state.hordeSafety = byId("horde-safety").checked;
@@ -1877,6 +1893,7 @@
     byId("save-chats").checked = state.saveChats;
     byId("auto-tools").checked = state.autoTools;
     byId("smart-tools").checked = state.smartTools;
+    byId("smart-tools").disabled = state.autoTools;
     byId("show-model-logos").checked = state.showModelLogos;
     byId("system-prompt").value = state.systemPrompt;
     byId("horde-safety").checked = state.hordeSafety;
@@ -2031,9 +2048,13 @@
       }
     };
     byId("provider").onchange = function () {
+      window.TibUITools.manualProvider();
       updateProviderUI(true);
     };
     byId("model").onchange = onModelChange;
+    byId("auto-tools").onchange = function () {
+      byId("smart-tools").disabled = this.checked;
+    };
     byId("prompt-form").onsubmit = submitPrompt;
     byId("prompt-input").oninput = resizePrompt;
     byId("prompt-input").onkeydown = function (event) {
@@ -2104,6 +2125,14 @@
       byId: byId,
       stripSlash: stripSlash,
       requestJson: requestJson,
+      cancelRequest: function () {
+        if (sending) {
+          abortActive();
+        }
+      },
+      getConversation: function () {
+        return historyMessages("", true);
+      },
       modelRequest: function (prompt) {
         return providerRequest(
           prompt,
@@ -2123,12 +2152,15 @@
       refreshImageModels: function () {
         loadHordeModels("image");
       },
-      changeProvider: function (provider) {
-        if (sending) {
+      changeProvider: function (provider, preserveRequest) {
+        if (sending && !preserveRequest) {
           abortActive();
         }
         byId("provider").value = provider;
-        updateProviderUI(true);
+        updateProviderUI(!preserveRequest);
+        if (sending) {
+          byId("model").disabled = true;
+        }
       }
     });
     window.TibUIFiles.init({

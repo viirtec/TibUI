@@ -11,7 +11,7 @@ TibUI is a small, self-hostable AI frontend made from static HTML, CSS, and Java
 - Stable Horde image controls in Settings, with optional safety filtering and repeatable seeds
 - Optional **Smart tools**, off by default: model-prepared tool queries, lookups, and a final answer using the results
 - A + tools menu with on/off switches generated from a modular tool registry, with enabled-tool buttons in the composer
-- Optional automatic tool selection in Settings, off by default
+- Optional AI tool selection using conversation context in Settings, off by default
 - Live Open-Meteo weather and seven-day forecasts without an API key
 - Wikipedia lookup in six languages
 - Keyless GitHub repository and issue search, repository filename lookup, and text-file reading
@@ -19,7 +19,7 @@ TibUI is a small, self-hostable AI frontend made from static HTML, CSS, and Java
 - Individual chat export and selective JSON chat import, including images, sources, and attached text
 - Keyless Frankfurter currency conversion using the latest daily reference rate
 - Crossref research-paper search and DOI metadata lookup, with abstracts and accessible Europe PMC article text
-- Copy, download, and wrap controls for fenced code blocks
+- Copy controls under messages; copy, download, and wrap controls for fenced code blocks
 - Local Ollama model discovery and generation controls
 - Optional SearXNG web search using a same-origin relay or a direct browser connection
 - Anonymous sessions by default, with opt-in cookie chat storage
@@ -207,9 +207,11 @@ For example, `read paper DOI 10.1093/nar/gku1061` adds the accessible article bo
 
 ## Automatic tool selection
 
-Under **Settings → Chat & experimental search**, turn on **Automatic tool selection** if desired. It is off by default. Simple local matching selects tools for explicit weather requests, currency pairs, GitHub queries, Wikipedia mentions, web-search requests, research-paper queries, and DOI identifiers. Requests starting with `draw ...` or `generate/create/make an image ...` can select image generation. There is no extra classification request or model dependency. Bare city names need a manual Weather selection, and ambiguous requests may still need manual tool selection.
+Under **Settings → Chat & experimental search**, turn on **Automatic tool selection** if desired. It is off by default. The selected model receives recent conversation messages and the available tool catalog, then selects useful tools and prepares their input in one JSON planning request. There is no English keyword gate: Estonian questions, paraphrases and follow-ups are interpreted by the model. For example, after discussing Shiba Inu dogs, `How big are they?` can become a Wikipedia search for Shiba Inu height and weight.
 
-Manual tool selections continue to apply. Automatically selected text tools are chosen for each message rather than changing saved manual switches. Web search still requires its Settings availability switch and connection configuration. Text lookup tools are unavailable while generating images. Image selection switches to Horde images until turned off.
+Automatic selection includes Smart tools automatically; its separate checkbox is disabled while automatic selection is on and restores its saved preference when automatic selection is turned off. Manual selections continue to apply. Optional automatic tools are limited to three per message and are shown with an “auto” chip rather than saved as manual switches. Greetings and requests that do not benefit from lookup can skip tools. Automatically selected tools appear as checked switches. Turn one off to clear its current selection. It remains available for the AI to select again on a later message when useful; switching it on explicitly enables it manually. Switching, starting or deleting chats clears automatic selections, and automatic image selection restores the previous text provider. Manually selected tools retain their existing behavior.
+
+Only available tools appear in the catalog. Web search still requires its Settings availability switch and connection configuration. Text lookup tools are unavailable while generating images. An explicit image request can switch to Horde images after planning, retaining image settings, without cancelling the active request. Turning image generation off returns to the previous text provider.
 
 ## Code blocks
 
@@ -225,13 +227,15 @@ Safari versions without download-attribute support may open the JSON instead; sa
 
 ## Smart tools
 
-Enable **Settings → Chat & experimental search → Smart tools** to add a planning step before tool lookups. It is off by default and independent of Automatic tool selection: manual switches or automatic matching still determine which tools run.
+Enable **Settings → Chat & experimental search → Smart tools** to expand manual lookups with up to three focused queries per search tool. It is off by default. Basic input preparation for manually selected tools always uses the conversation, even with Smart tools off, so follow-up questions and natural phrasing can become valid tool inputs. Automatic selection includes Smart tools in its shared planning step.
 
-The selected text model receives the original request and the selected tools' input instructions, then returns a JSON plan. Each search tool can run up to three short, distinct queries. Weather and currency use one canonical input; GitHub keeps its repository, issue, filename and file-reading syntax; research preserves exact DOIs and extracts available paper text. Wikipedia searches use its configured language. For example, an Estonian Wikipedia question such as `millal oli eestis laulev revolutsioon` can produce `laulev revolutsioon`, `eesti`, and `eesti iseseisvuse taastamine`. Results become reference context for the model's answer to the original question, with source links.
+The planner receives recent user and assistant messages up to the configured history limit, bounded to 24 messages and 32,000 characters. Tool context is supplied with the latest user message for the final answer, rather than attached to earlier questions. Messages remain in the active chat without requiring cookies; opt-in storage and JSON export/import still control persistence across sessions. Starting a new chat starts new conversation context.
 
-Image generation uses the previous text provider to refine the image prompt before submitting it to Stable Horde, retaining the image settings. Planning requests are separate from chat history and exports. This adds one model request and can add search requests, latency, provider usage or queue time. Invalid plans or unavailable planning providers fall back to the original input with a status warning. Cancelling also stops the planning and lookup pipeline. Tool failures keep their existing required/optional behavior.
+Weather and currency use one canonical input. Currency input validation preserves the amount and codes when the user supplied an explicit currency pair. GitHub prepares repository, issue, filename or file-reading queries from natural phrasing. Research preserves DOIs and extracts available paper text. Wikipedia searches use its configured language. For example, an Estonian Wikipedia question such as `millal oli eestis laulev revolutsioon` can produce `laulev revolutsioon`, `eesti`, and `eesti iseseisvuse taastamine`. Tool results become reference context for an answer to the original question, with source links.
 
-Plans accept bounded input strings for registered tools only; the model cannot supply API endpoints or executable code. New context tools participate automatically with the existing `run(query, cancelled)` contract; a `planningHint` improves their input preparation.
+The planner retries an invalid or incomplete plan once with feedback. A tool that returns no useful results or fails gets one query-repair step and a bounded lookup retry. Remaining required failures stop the request; optional failures appear as status warnings. If planning remains unavailable, manually selected tools try the original request; automatic selection reports the failure rather than silently reverting to English keyword matching. No planning attempt is stored as a chat message. Cancellation stops planning, repair and lookups.
+
+Image generation uses the previous text provider to refine the image prompt before submitting it to Stable Horde. Planning and retries add model requests, latency and potential provider usage or queue time. Plans accept bounded strings for listed tools only; the model cannot supply arbitrary endpoints or executable code. New context tools participate through `run(query, cancelled)`; `planningHint` describes accepted input, and optional `validateQuery(query, original)` rejects invalid plans before execution.
 
 ## Adding tools
 
@@ -285,23 +289,9 @@ Add a file under `tools/`, register it, and regenerate the manifest. No changes 
 })(window);
 ```
 
-`planningHint` is optional tool-local guidance for Smart tools; without it the registry asks for concise search keywords. The shared planner returns `{ "tools": { "example": { "queries": ["topic keywords"] } } }`, validates and deduplicates queries, and executes each through `run(query, cancelled)` without changes to `app.js`. Mark a tool `required: true` when it needs one exact operation and failure must stop the request. `generationTool: true` tools receive one refined generation prompt.
+`planningHint` is optional tool-local guidance for Smart tools; without it the registry asks for concise search keywords. The AI selects available tools using their name and guidance, without a keyword matcher. The shared planner returns `{ "tools": { "example": { "queries": ["topic keywords"] } } }`, validates and deduplicates queries, and executes each through `run(query, cancelled)` without changes to `app.js`. Mark a tool `required: true` when it needs one exact operation and failure must stop the request. `generationTool: true` tools receive one refined generation prompt.
 
-`matches(prompt)` optionally enables a tool for automatic selection without changing its manual switch. `run` returns a Promise; optional `results` rows contain `title`, `url`, and `content` for source display. Optional `shouldRun(prompt)` filters execution, `enabledKey` connects a Settings availability preference, `required` makes a lookup failure stop the request, and `setActive(value)` handles special switches such as image generation. Shared helpers include state, DOM lookup, request handling, and saving. Tool context is untrusted reference material and should be labeled accordingly. Keep tool code and APIs compatible with older Safari.
-
-## Validation
-
-The development machine keeps UI tests and pre-publication helpers in ignored `tests/` and `scripts/` directories. They are not included in the GitHub source or required on users' devices. Local dependencies and generated screenshots live under ignored `.artifacts/`.
-
-When those local helpers are available, start the static server and run:
-
-```sh
-npm install --prefix .artifacts/test-deps playwright acorn prettier
-.artifacts/test-deps/node_modules/.bin/playwright install webkit
-NODE_PATH="$PWD/.artifacts/test-deps/node_modules" node tests/ui.cjs
-```
-
-The local suite checks ES5 syntax, provider requests, Smart tools planning across text providers, multilingual query preparation, plan validation and fallbacks, image prompt refinement, cancellation, tools, paper-text extraction and fallbacks, attachments, chat transfer, code controls, cancellation, and layouts at 320, 375, 768, and 1440 px in Chromium and WebKit. Local screenshots and results are retained for development and excluded from Git. A clean GitHub checkout can be served directly without these helpers. Modern WebKit and ES5 checks do not replace physical iOS 12 testing; live provider availability is separate from mocked tests.
+`run` returns a Promise; optional `results` rows contain `title`, `url`, and `content` for source display. Optional `shouldRun(prompt)` filters execution, `enabledKey` connects a Settings availability preference, `required` makes a lookup failure stop the request, and `setActive(value)` handles special switches such as image generation. Shared helpers include state, DOM lookup, request handling, and saving. An optional `validateQuery(query, original)` validates prepared inputs. Tool context is untrusted reference material and should be labeled accordingly. Keep tool code and APIs compatible with older Safari.
 
 ## Project structure
 

@@ -289,14 +289,6 @@
         options.state.provider !== "hordeImage"
       );
     },
-    matches: function (prompt) {
-      return (
-        !!doi(prompt) ||
-        /\b(find (?:research )?papers?|search (?:for )?(?:research )?papers?|research papers?|scientific papers?|academic papers?|crossref|doi|journal articles?|read (?:this |the )?paper|summari[sz]e (?:this |the )?paper)\b/i.test(
-          prompt
-        )
-      );
-    },
     run: run,
     formatContext: function (data) {
       return data.context;

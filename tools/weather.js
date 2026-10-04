@@ -329,13 +329,6 @@
     enabledKey: "weatherEnabled",
     contextTool: true,
     required: true,
-    matches: function (prompt) {
-      return (
-        /\b(weather|forecast|temperature|will it rain|will it snow)\b/i.test(
-          prompt
-        ) && !!parse(prompt)
-      );
-    },
     init: init,
     isActive: isActive,
     run: run,

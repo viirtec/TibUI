@@ -180,9 +180,6 @@
         options.state.provider !== "hordeImage"
       );
     },
-    matches: function (prompt) {
-      return /^github\b|\bgithub\s+(repos?|code|issues?|files)\b/i.test(prompt);
-    },
     run: run,
     formatContext: function (data) {
       return data.context;

@@ -92,12 +92,20 @@
         options.state.provider !== "hordeImage"
       );
     },
-    matches: function (prompt) {
-      return !!parse(prompt);
-    },
     run: run,
     formatContext: function (data) {
       return data.context;
+    },
+    validateQuery: function (query, original) {
+      var args = parse(query);
+      var requested = parse(original);
+      return (
+        !!args &&
+        (!requested ||
+          (args.amount === requested.amount &&
+            args.from === requested.from &&
+            args.to === requested.to))
+      );
     },
     extractConversion: parse
   });

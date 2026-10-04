@@ -13,11 +13,6 @@
     planningHint:
       "Return one improved image-generation prompt preserving the requested subjects, style and constraints. Do not answer the user or add unrelated subjects.",
     generationTool: true,
-    matches: function (prompt) {
-      return /^(?:draw\s+|(?:generate|create|make)\s+(?:an?\s+)?(?:image|picture|illustration)\b)/i.test(
-        prompt
-      );
-    },
     init: function (context) {
       options = context;
       options.byId("horde-image-steps").oninput = updateLabels;
@@ -32,12 +27,15 @@
     isActive: function () {
       return options.state.provider === "hordeImage";
     },
-    setActive: function (active) {
+    setActive: function (active, preserveRequest) {
       if (active) {
         options.state.previousTextProvider = options.state.provider;
-        options.changeProvider("hordeImage");
+        options.changeProvider("hordeImage", preserveRequest);
       } else {
-        options.changeProvider(options.state.previousTextProvider || "chat");
+        options.changeProvider(
+          options.state.previousTextProvider || "chat",
+          preserveRequest
+        );
       }
     }
   });

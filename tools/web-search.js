@@ -238,9 +238,6 @@
     contextTool: true,
     init: init,
     isActive: isActive,
-    matches: function (prompt) {
-      return /\b(search the web|web search|search online)\b/i.test(prompt);
-    },
     run: function (query) {
       return runSearch(query, false);
     },
