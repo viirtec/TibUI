@@ -17,4 +17,5 @@
 !/tools/*.js
 !/tools/math.js
 !/tools/translate.js
+!/tools
 /tests

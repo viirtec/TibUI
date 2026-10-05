@@ -9,5 +9,7 @@ window.TibUIToolFiles = [
   "research.js",
   "weather.js",
   "web-search.js",
-  "wikipedia.js"
+  "wikipedia.js",
+  "math.js",
+  "translate.js"
 ];
