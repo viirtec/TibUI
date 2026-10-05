@@ -11,5 +11,6 @@ window.TibUIToolFiles = [
   "web-search.js",
   "wikipedia.js",
   "math.js",
-  "translate.js"
+  "translate.js",
+  "unit-converter.js"
 ];
