@@ -1,6 +1,6 @@
-(function() {
+(function () {
   "use strict";
-  
+
   var COOKIE_NAME = "tibui_state_v2";
   var HORDE_API = "https://aihorde.net/api/v2";
   var ANON_KEY = "0000000000";
@@ -13,6 +13,9 @@
     saveChats: false,
     autoTools: false,
     smartTools: false,
+    toolPolicies: {},
+    presets: [],
+    presetFavorites: [],
     systemPrompt: "",
     pollinationsModel: "openai-fast",
     hordeTextModel: "",
@@ -33,6 +36,7 @@
     ollamaKeepAlive: "5m",
     customUrl: "https://api.openai.com/v1",
     customModel: "gpt-4o-mini",
+    customTemperature: null,
     showModelLogos: true,
     webSearchEnabled: false,
     webSearchToolActive: false,
@@ -42,7 +46,7 @@
     wikipediaToolActive: false,
     wikipediaLanguage: "en",
     wikipediaResultsCount: 3,
-    
+
     webSearchMode: "auto",
     webSearchRelay: "/searxng",
     webSearchInstances: ["https://severian-searxng.hf.space"],
@@ -57,6 +61,7 @@
     folders: [],
     historyLimit: 12
   };
+  var defaultState = JSON.parse(JSON.stringify(state));
   var pollinationsModels = [];
   var hordeTextModels = [];
   var hordeImageModels = [];
@@ -69,18 +74,19 @@
   var activeHordeJob = null;
   var sending = false;
   var requestVersion = 0;
+  var requestHistoryEnd = null;
   var lastFocus = null;
-  
+
   function byId(id) {
     return document.getElementById(id);
   }
-  
+
   function addClass(node, name) {
     if (node && (" " + node.className + " ").indexOf(" " + name + " ") < 0) {
       node.className = node.className ? node.className + " " + name : name;
     }
   }
-  
+
   function removeClass(node, name) {
     if (node) {
       node.className = (" " + node.className + " ")
@@ -88,7 +94,7 @@
         .replace(/^\s+|\s+$/g, "");
     }
   }
-  
+
   function setClass(node, name, enabled) {
     if (enabled) {
       addClass(node, name);
@@ -96,7 +102,7 @@
       removeClass(node, name);
     }
   }
-  
+
   function clampNumber(value, fallback, minimum, maximum) {
     var number = Number(value);
     if (!isFinite(number)) {
@@ -104,11 +110,11 @@
     }
     return Math.max(minimum, Math.min(maximum, number));
   }
-  
+
   function stripSlash(value) {
     return String(value || "").replace(/\/+$/, "");
   }
-  
+
   function parseLines(value) {
     var lines = String(value || "").split(/\r?\n/);
     var clean = [];
@@ -124,7 +130,7 @@
     }
     return clean;
   }
-  
+
   function cookieValue(name) {
     var parts = document.cookie ? document.cookie.split(";") : [];
     var i;
@@ -137,7 +143,7 @@
     }
     return "";
   }
-  
+
   function loadState() {
     var raw = cookieValue(COOKIE_NAME) || cookieValue("tibui_state_v1");
     var saved;
@@ -175,15 +181,22 @@
       state.chats = [];
     }
   }
-  
+
   function stateForCookie() {
     var copy = {};
     var key;
     for (key in state) {
-      if (Object.prototype.hasOwnProperty.call(state, key)) {
+      if (
+        Object.prototype.hasOwnProperty.call(state, key) &&
+        key !== "chats" &&
+        key !== "presets" &&
+        JSON.stringify(state[key]) !== JSON.stringify(defaultState[key]) &&
+        !(typeof defaultState[key] === "undefined" && state[key] === false)
+      ) {
         copy[key] = state[key];
       }
     }
+    copy.presets = [];
     copy.chats = JSON.parse(JSON.stringify(state.chats.slice(-8)));
     while (
       encodeURIComponent(JSON.stringify(copy)).length > 3500 &&
@@ -193,6 +206,20 @@
         delete copy.chats[0].summary;
         delete copy.chats[0].summaryThrough;
         copy.chats[0].contextMode = "recent";
+      } else if (
+        copy.chats[0].messages &&
+        copy.chats[0].messages.some(function (message) {
+          return message.versions;
+        })
+      ) {
+        copy.chats[0].messages.some(function (message) {
+          if (message.versions) {
+            delete message.versions;
+            delete message.versionIndex;
+            return true;
+          }
+          return false;
+        });
       } else if (copy.chats[0].messages && copy.chats[0].messages.length) {
         var removed = copy.chats[0].messages.shift();
         if (
@@ -213,8 +240,11 @@
     }
     return copy;
   }
-  
+
   function saveState() {
+    if (window.TibUIPresets) {
+      window.TibUIPresets.saveStorage(state.saveChats);
+    }
     if (!state.saveChats) {
       document.cookie = COOKIE_NAME + "=; Max-Age=0; Path=/; SameSite=Lax";
       document.cookie = "tibui_state_v1=; Max-Age=0; Path=/; SameSite=Lax";
@@ -233,13 +263,13 @@
     }
     updatePrivacy();
   }
-  
+
   function makeId() {
     return (
       String(new Date().getTime()) + String(Math.floor(Math.random() * 100000))
     );
   }
-  
+
   function newChat() {
     var selectedFolder = window.TibUIWorkspace.startChat();
     var current = activeChat();
@@ -268,7 +298,7 @@
     closeMenu();
     byId("prompt-input").focus();
   }
-  
+
   function activeChat() {
     var i;
     for (i = 0; i < state.chats.length; i += 1) {
@@ -278,7 +308,7 @@
     }
     return null;
   }
-  
+
   function renderChats() {
     window.TibUITools.syncChat();
     if (window.TibUIWorkspace) {
@@ -314,11 +344,12 @@
       remove.innerHTML = "&#215;";
       remove.onclick = deleteChat;
       entry.appendChild(button);
+      window.TibUIWorkspace.archiveAction(entry, chat);
       entry.appendChild(remove);
       list.appendChild(entry);
     }
   }
-  
+
   function selectChat(event) {
     if (
       sending &&
@@ -332,7 +363,7 @@
     renderMessages();
     closeMenu();
   }
-  
+
   function deleteChat(event) {
     var id = event.currentTarget.getAttribute("data-chat-id");
     var index = -1;
@@ -362,7 +393,7 @@
     renderChats();
     renderMessages();
   }
-  
+
   function escapeHtml(value) {
     return String(value || "")
       .replace(/&/g, "&amp;")
@@ -371,7 +402,7 @@
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
   }
-  
+
   function inlineMarkdown(value) {
     var tokens = [];
     var source = String(value || "");
@@ -379,19 +410,19 @@
     var i;
     source = source.replace(
       /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/gi,
-      function(match, text, url) {
+      function (match, text, url) {
         var marker = "\u0001TIB" + tokens.length + "\u0002";
         tokens.push(
           '<a href="' +
-          escapeHtml(url) +
-          '" target="_blank" rel="noopener noreferrer">' +
-          escapeHtml(text) +
-          "</a>"
+            escapeHtml(url) +
+            '" target="_blank" rel="noopener noreferrer">' +
+            escapeHtml(text) +
+            "</a>"
         );
         return marker;
       }
     );
-    source = source.replace(/`([^`\n]+)`/g, function(match, code) {
+    source = source.replace(/`([^`\n]+)`/g, function (match, code) {
       var marker = "\u0001TIB" + tokens.length + "\u0002";
       tokens.push("<code>" + escapeHtml(code) + "</code>");
       return marker;
@@ -407,7 +438,7 @@
     }
     return html;
   }
-  
+
   function tableCells(line) {
     var value = String(line || "")
       .replace(/^\s*\|/, "")
@@ -419,7 +450,7 @@
     }
     return cells;
   }
-  
+
   function isTableDivider(line) {
     var cells = tableCells(line);
     var i;
@@ -433,7 +464,7 @@
     }
     return true;
   }
-  
+
   function renderText(container, value) {
     var lines = String(value || "")
       .replace(/\r\n?/g, "\n")
@@ -451,13 +482,15 @@
     var cells;
     var row;
     var j;
-    
+
     function closeParagraph() {
       var rendered = [];
       var paragraphIndex;
       if (paragraph.length) {
         for (
-          paragraphIndex = 0; paragraphIndex < paragraph.length; paragraphIndex += 1
+          paragraphIndex = 0;
+          paragraphIndex < paragraph.length;
+          paragraphIndex += 1
         ) {
           rendered.push(inlineMarkdown(paragraph[paragraphIndex]));
         }
@@ -465,14 +498,14 @@
         paragraph = [];
       }
     }
-    
+
     function closeList() {
       if (listType) {
         html += "</" + listType + ">";
         listType = "";
       }
     }
-    
+
     while (i < lines.length) {
       line = lines[i];
       if (inCode) {
@@ -611,7 +644,7 @@
     container.innerHTML = html;
     window.TibUICode.enhance(container, copyText);
   }
-  
+
   function appendSources(container, sources) {
     var box;
     var title;
@@ -624,7 +657,7 @@
     box.className = "sources";
     title = document.createElement("strong");
     title.textContent = "Sources";
-    
+
     box.appendChild(title);
     for (i = 0; i < sources.length; i += 1) {
       link = document.createElement("a");
@@ -636,34 +669,34 @@
     }
     container.appendChild(box);
   }
-  
+
   function copyText(value, button) {
     var text = String(value || "");
     var original = button.innerHTML;
     var originalLabel = button.getAttribute("aria-label") || "Copy message";
-    
+
     function copied() {
       button.innerHTML = "✓";
       button.setAttribute("aria-label", "Copied");
       button.title = "Copied";
-      
-      window.setTimeout(function() {
+
+      window.setTimeout(function () {
         button.innerHTML = original;
         button.setAttribute("aria-label", originalLabel);
         button.title = originalLabel;
       }, 1400);
     }
-    
+
     function failed() {
       button.setAttribute("aria-label", "Copy failed");
       button.title = "Copy failed";
-      
-      window.setTimeout(function() {
+
+      window.setTimeout(function () {
         button.setAttribute("aria-label", originalLabel);
         button.title = originalLabel;
       }, 1400);
     }
-    
+
     if (
       navigator.clipboard &&
       typeof navigator.clipboard.writeText === "function"
@@ -671,12 +704,12 @@
       navigator.clipboard
         .writeText(text)
         .then(copied)
-        .catch(function() {
+        .catch(function () {
           failed();
         });
       return;
     }
-    
+
     var textarea = document.createElement("textarea");
     textarea.value = text;
     textarea.setAttribute("readonly", "");
@@ -684,7 +717,7 @@
     textarea.style.left = "-9999px";
     document.body.appendChild(textarea);
     textarea.select();
-    
+
     try {
       if (document.execCommand("copy")) {
         copied();
@@ -694,10 +727,10 @@
     } catch (ignore) {
       failed();
     }
-    
+
     document.body.removeChild(textarea);
   }
-  
+
   function renderMessages() {
     var chat = activeChat();
     var list = byId("messages");
@@ -724,9 +757,9 @@
       label = document.createElement("div");
       label.className = "message-label";
       label.textContent =
-        message.role === "user" ?
-        "You" :
-        message.label || providerLabel(state.provider);
+        message.role === "user"
+          ? "You"
+          : message.label || providerLabel(state.provider);
       if (message.kind === "image") {
         image = document.createElement("img");
         image.className = "generated-image";
@@ -746,28 +779,28 @@
       window.TibUIWorkspace.inspector(bubble, message.toolResults);
       var actions;
       var copyButton;
-      
+
       actions = document.createElement("div");
       actions.className = "message-actions";
-      
+
       copyButton = document.createElement("button");
       copyButton.type = "button";
       copyButton.className = "message-copy";
       copyButton.setAttribute("aria-label", "Copy message");
       copyButton.title = "Copy message";
       copyButton.innerHTML = "⧉";
-      
-      copyButton.onclick = (function(content, button) {
-        return function(event) {
+
+      copyButton.onclick = (function (content, button) {
+        return function (event) {
           event.preventDefault();
           event.stopPropagation();
           copyText(content, button);
         };
       })(message.content, copyButton);
-      
+
       actions.appendChild(copyButton);
       window.TibUIWorkspace.addActions(actions, chat, i);
-      
+
       var body = document.createElement("div");
       body.className = "message-body";
       body.appendChild(bubble);
@@ -778,14 +811,14 @@
     }
     scrollConversation();
   }
-  
+
   function scrollConversation() {
     var node = byId("conversation");
-    window.setTimeout(function() {
+    window.setTimeout(function () {
       node.scrollTop = node.scrollHeight;
     }, 0);
   }
-  
+
   function providerLabel(provider) {
     var labels = {
       chat: "GPT-4o",
@@ -797,26 +830,29 @@
     };
     return labels[provider] || "Assistant";
   }
-  
+
   function providerNote(provider) {
     var notes = {
       chat: "Credential-less GPT-4o-compatible access provided by ch.at.",
-      pollinations: "Free models from the Pollinations anonymous legacy endpoint.",
-      hordeText: "Community-hosted text models. Queue time depends on live workers.",
-      hordeImage: "Community-hosted image models with optional safety filtering.",
+      pollinations:
+        "Free models from the Pollinations anonymous legacy endpoint.",
+      hordeText:
+        "Community-hosted text models. Queue time depends on live workers.",
+      hordeImage:
+        "Community-hosted image models with optional safety filtering.",
       ollama: "Connect directly to an Ollama server you control.",
       custom: "Connect to a browser-accessible OpenAI-compatible endpoint."
     };
     return notes[provider] || "";
   }
-  
+
   function option(select, value, label) {
     var item = document.createElement("option");
     item.value = value;
     item.textContent = label;
     select.appendChild(item);
   }
-  
+
   function etaText(seconds) {
     var value = Number(seconds);
     if (!isFinite(value) || value < 0) {
@@ -827,7 +863,7 @@
     }
     return "ETA " + Math.round(value / 60) + "m";
   }
-  
+
   function simplifyHordeTextName(raw) {
     var name = String(raw || "")
       .split("/")
@@ -841,7 +877,7 @@
       .replace(/^\s+|\s+$/g, "");
     return name || raw;
   }
-  
+
   function currentModel() {
     if (state.provider === "chat") {
       return "gpt-4o";
@@ -860,7 +896,7 @@
     }
     return state.customModel;
   }
-  
+
   function currentHordeRecord(list, name) {
     var i;
     for (i = 0; i < list.length; i += 1) {
@@ -870,7 +906,7 @@
     }
     return null;
   }
-  
+
   function refreshLiveHorde() {
     if (liveHordeTimer) {
       window.clearTimeout(liveHordeTimer);
@@ -880,7 +916,7 @@
     if (!key) {
       return;
     }
-    
+
     function schedule() {
       if (key === liveHordeKey) {
         liveHordeTimer = window.setTimeout(refreshLiveHorde, 30000);
@@ -891,14 +927,14 @@
       return;
     }
     window.TibUIHordeModels.live(name)
-      .then(function(data) {
+      .then(function (data) {
         if (key !== liveHordeKey) {
           return;
         }
         liveHordeRecord = currentHordeRecord(data, name);
         updateModelMeta();
       })
-      .catch(function() {
+      .catch(function () {
         if (key === liveHordeKey) {
           liveHordeRecord = null;
           byId("model-meta").textContent = "Live queue unavailable";
@@ -906,12 +942,12 @@
       })
       .then(schedule);
   }
-  
+
   function updateModelMeta() {
     var key =
-      state.provider === "hordeText" || state.provider === "hordeImage" ?
-      state.provider + ":" + currentModel() :
-      "";
+      state.provider === "hordeText" || state.provider === "hordeImage"
+        ? state.provider + ":" + currentModel()
+        : "";
     if (key !== liveHordeKey) {
       liveHordeKey = key;
       liveHordeRecord = null;
@@ -924,22 +960,22 @@
       }
     }
     var record = liveHordeRecord;
-    byId("model-meta").textContent = record ?
-      Number(record.count || 0) +
-      " worker" +
-      (Number(record.count || 0) === 1 ? "" : "s") +
-      " · Queue: " +
-      Number(
-        typeof record.jobs === "number" ? record.jobs : record.queued || 0
-      ) +
-      " · " +
-      etaText(record.eta) :
-      key ?
-      "Loading live queue…" :
-      "";
+    byId("model-meta").textContent = record
+      ? Number(record.count || 0) +
+        " worker" +
+        (Number(record.count || 0) === 1 ? "" : "s") +
+        " · Queue: " +
+        Number(
+          typeof record.jobs === "number" ? record.jobs : record.queued || 0
+        ) +
+        " · " +
+        etaText(record.eta)
+      : key
+        ? "Loading live queue…"
+        : "";
     updateModelLogo();
   }
-  
+
   function logoFor(provider, model) {
     var value = String(model || "").toLowerCase();
     if (provider === "ollama") {
@@ -994,7 +1030,7 @@
     }
     return { fallback: "AI" };
   }
-  
+
   function updateModelLogo() {
     var holder = byId("model-logo");
     var logo = logoFor(state.provider, currentModel());
@@ -1004,7 +1040,7 @@
       node = document.createElement("img");
       node.src = logo.src;
       node.alt = "";
-      node.onerror = function() {
+      node.onerror = function () {
         holder.innerHTML = "<span>" + escapeHtml(logo.fallback) + "</span>";
       };
     } else {
@@ -1013,7 +1049,7 @@
     }
     holder.appendChild(node);
   }
-  
+
   function rebuildModelSelect() {
     var select = byId("model");
     var i;
@@ -1072,7 +1108,7 @@
     updateModelMeta();
     window.TibUIWorkspace.update();
   }
-  
+
   function onModelChange() {
     var value = byId("model").value;
     if (state.provider === "pollinations") {
@@ -1095,7 +1131,7 @@
     saveState();
     updateModelMeta();
   }
-  
+
   function updateProviderUI(loadLive) {
     var panels = document.querySelectorAll(".provider-settings");
     var i;
@@ -1107,7 +1143,7 @@
     byId("provider-summary").textContent = providerNote(state.provider);
     byId("provider-note").textContent = providerNote(state.provider);
     window.TibUITools.updateUI();
-    
+
     rebuildModelSelect();
     saveState();
     if (loadLive && state.provider === "hordeText" && !hordeTextModels.length) {
@@ -1128,7 +1164,7 @@
       loadPollinationsModels();
     }
   }
-  
+
   function requestJson(
     method,
     url,
@@ -1137,7 +1173,7 @@
     textResponse,
     timeoutSeconds
   ) {
-    return new Promise(function(resolve, reject) {
+    return new Promise(function (resolve, reject) {
       var xhr = new XMLHttpRequest();
       var key;
       activeXhr = xhr;
@@ -1158,7 +1194,7 @@
           }
         }
       }
-      xhr.onreadystatechange = function() {
+      xhr.onreadystatechange = function () {
         var parsed;
         var message;
         if (xhr.readyState !== 4) {
@@ -1198,20 +1234,20 @@
         reject(new Error(message));
       };
       if (textResponse) {
-        xhr.onprogress = function(event) {
+        xhr.onprogress = function (event) {
           if (event.loaded > 2000000) {
             reject(new Error("Paper download exceeds the 2 MB limit."));
             xhr.abort();
           }
         };
       }
-      xhr.ontimeout = function() {
+      xhr.ontimeout = function () {
         if (activeXhr === xhr) {
           activeXhr = null;
         }
         reject(new Error("The request timed out."));
       };
-      xhr.onerror = function() {
+      xhr.onerror = function () {
         if (activeXhr === xhr) {
           activeXhr = null;
         }
@@ -1221,26 +1257,26 @@
           )
         );
       };
-      xhr.onabort = function() {
+      xhr.onabort = function () {
         if (activeXhr === xhr) {
           activeXhr = null;
         }
         reject(new Error("Request cancelled."));
       };
       xhr.send(
-        body === null || typeof body === "undefined" ?
-        null :
-        JSON.stringify(body)
+        body === null || typeof body === "undefined"
+          ? null
+          : JSON.stringify(body)
       );
     });
   }
-  
+
   function loadPollinationsModels() {
     var button = byId("load-pollinations");
     button.disabled = true;
     button.textContent = "Loading…";
     requestJson("GET", "https://text.pollinations.ai/models", null, null)
-      .then(function(data) {
+      .then(function (data) {
         var list = Array.isArray(data) ? data : data.models || [];
         var found = [];
         var i;
@@ -1252,9 +1288,10 @@
           if (name) {
             found.push({
               name: name,
-              label: typeof item === "string" ?
-                item :
-                item.description || item.name || item.id
+              label:
+                typeof item === "string"
+                  ? item
+                  : item.description || item.name || item.id
             });
           }
         }
@@ -1266,21 +1303,21 @@
         byId("settings-status").textContent =
           found.length + " Pollinations models loaded.";
       })
-      .catch(function(error) {
+      .catch(function (error) {
         byId("settings-status").textContent = error.message;
       })
-      .then(function() {
+      .then(function () {
         button.disabled = false;
         button.textContent = "Refresh models";
       });
   }
-  
+
   function isAdultModel(name) {
     return /\bnsfw\b|porn|hentai|explicit|uncensored|nudity/i.test(
       String(name || "")
     );
   }
-  
+
   function loadHordeModels(type, force) {
     var isText = type === "text";
     var button = byId(isText ? "load-horde-text" : "load-horde-image");
@@ -1291,7 +1328,7 @@
     button.textContent = "Loading…";
     info.textContent = "Loading live worker information…";
     return window.TibUIHordeModels.load(type, force)
-      .then(function(data) {
+      .then(function (data) {
         var list = Array.isArray(data) ? data : [];
         var clean = [];
         var i;
@@ -1308,15 +1345,15 @@
             eta: typeof list[i].eta === "number" ? list[i].eta : null,
             queued: Number(list[i].queued || 0),
             jobs: Number(
-              typeof list[i].jobs === "number" ?
-              list[i].jobs :
-              list[i].queued || 0
+              typeof list[i].jobs === "number"
+                ? list[i].jobs
+                : list[i].queued || 0
             ),
             description: String(list[i].description || "").substring(0, 500),
             performance: Number(list[i].performance || 0)
           });
         }
-        clean.sort(function(a, b) {
+        clean.sort(function (a, b) {
           return (
             b.count - a.count || a.eta - b.eta || a.name.localeCompare(b.name)
           );
@@ -1338,35 +1375,35 @@
             state.hordeImageModel = clean[0].name;
           }
         }
-        info.textContent = clean.length ?
-          clean.length +
-          " available models. Model lists are reused for two minutes; the composer queue updates separately." :
-          "No compatible workers are currently available.";
+        info.textContent = clean.length
+          ? clean.length +
+            " available models. Model lists are reused for two minutes; the composer queue updates separately."
+          : "No compatible workers are currently available.";
         rebuildModelSelect();
         if (force && liveHordeKey) {
           refreshLiveHorde();
         }
         saveState();
       })
-      .catch(function(error) {
+      .catch(function (error) {
         info.textContent = error.message;
       })
-      .then(function() {
+      .then(function () {
         button.disabled = false;
-        button.textContent = isText ?
-          "Refresh text models" :
-          "Refresh image models";
+        button.textContent = isText
+          ? "Refresh text models"
+          : "Refresh image models";
         return isText ? hordeTextModels : hordeImageModels;
       });
   }
-  
+
   function loadOllamaModels() {
     var button = byId("load-ollama");
     var base = stripSlash(byId("ollama-url").value);
     button.disabled = true;
     button.textContent = "Loading…";
     requestJson("GET", base + "/api/tags", null, null)
-      .then(function(data) {
+      .then(function (data) {
         var list = data.models || [];
         var datalist = byId("ollama-models");
         var i;
@@ -1384,19 +1421,32 @@
         byId("settings-status").textContent =
           ollamaModels.length + " Ollama models found.";
       })
-      .catch(function(error) {
+      .catch(function (error) {
         byId("settings-status").textContent =
           error.message +
           " Configure OLLAMA_ORIGINS when connecting across origins.";
       })
-      .then(function() {
+      .then(function () {
         button.disabled = false;
         button.textContent = "Load models";
       });
   }
-  
+
   function historyMessages(webContext, plain) {
     var chat = activeChat();
+    if (chat && requestHistoryEnd !== null) {
+      chat = JSON.parse(JSON.stringify(chat));
+      chat.messages = chat.messages.slice(0, requestHistoryEnd + 1);
+      if (
+        chat.summaryThrough >
+        chat.messages.filter(function (m) {
+          return m.kind !== "image" && !m.error;
+        }).length
+      ) {
+        delete chat.summary;
+        delete chat.summaryThrough;
+      }
+    }
     var history = window.TibUIWorkspace.history(chat);
     var filtered = [];
     var start;
@@ -1413,23 +1463,24 @@
         content: "Summary of previous conversation: " + chat.summary
       });
     }
-    
+
     if (webContext) {
       system += (system ? "\n\n" : "") + webContext;
     }
-    
+
     start = 0;
-    
+
     for (i = start; i < history.length; i += 1) {
       content =
         history[i].content +
-        (history[i].attachmentContext ?
-          "\n\n" + history[i].attachmentContext :
-          "");
+        (history[i].attachmentContext
+          ? "\n\n" + history[i].attachmentContext
+          : "");
       if (history[i].role === "user" && system && i === history.length - 1) {
         filtered.push({
           role: "user",
-          content: "[SYSTEM INSTRUCTIONS]\n" +
+          content:
+            "[SYSTEM INSTRUCTIONS]\n" +
             system +
             "\n\n[END SYSTEM INSTRUCTIONS]\n\n" +
             content
@@ -1441,28 +1492,34 @@
         });
       }
     }
-    
+
     return filtered;
   }
-  
-  function openAIRequest(url, model, webContext, headers, messages) {
-    return requestJson(
-      "POST",
-      url,
-      {
-        model: model,
-        messages: messages || historyMessages(webContext),
-        stream: false
-      },
-      headers
-    ).then(function(data) {
+
+  function openAIRequest(
+    url,
+    model,
+    webContext,
+    headers,
+    messages,
+    temperature
+  ) {
+    var payload = {
+      model: model,
+      messages: messages || historyMessages(webContext),
+      stream: false
+    };
+    if (typeof temperature === "number") {
+      payload.temperature = temperature;
+    }
+    return requestJson("POST", url, payload, headers).then(function (data) {
       if (!data.choices || !data.choices[0] || !data.choices[0].message) {
         throw new Error("The provider returned no message.");
       }
       return String(data.choices[0].message.content || "");
     });
   }
-  
+
   function ollamaRequest(webContext, messages) {
     var options = {
       temperature: state.ollamaTemperature,
@@ -1483,14 +1540,14 @@
         options: options
       },
       null
-    ).then(function(data) {
+    ).then(function (data) {
       if (!data.message) {
         throw new Error("Ollama returned no message.");
       }
       return String(data.message.content || "");
     });
   }
-  
+
   function customChatUrl() {
     var base = stripSlash(state.customUrl);
     if (/\/chat\/completions$/i.test(base)) {
@@ -1498,26 +1555,26 @@
     }
     return base + "/chat/completions";
   }
-  
+
   function hordePrompt(webContext, suppliedMessages) {
     var messages = suppliedMessages || historyMessages(webContext);
     var parts = [];
     var i;
     for (i = 0; i < messages.length; i += 1) {
       parts.push(
-        (messages[i].role === "assistant" ?
-          "Assistant" :
-          messages[i].role === "system" ?
-          "System" :
-          "User") +
-        ": " +
-        messages[i].content
+        (messages[i].role === "assistant"
+          ? "Assistant"
+          : messages[i].role === "system"
+            ? "System"
+            : "User") +
+          ": " +
+          messages[i].content
       );
     }
     parts.push("Assistant:");
     return parts.join("\n\n");
   }
-  
+
   function clearActiveJob() {
     if (activeTimer) {
       window.clearTimeout(activeTimer);
@@ -1525,30 +1582,24 @@
     }
     activeHordeJob = null;
   }
-  
+
   function hordeGenerationPath(kind, action, id) {
     var path = kind === "text" ? "/generate/text/" : "/generate/";
     return HORDE_API + path + action + (id ? "/" + encodeURIComponent(id) : "");
   }
-  
+
   function pollHordeJob(id, kind, resolve, reject) {
-    requestJson(
-        "GET",
-        hordeGenerationPath(kind, "check", id),
-        null,
-        {
-          "Client-Agent": "TibUI:2.0:viirtec"
-        }
-      )
-      .then(function(data) {
+    requestJson("GET", hordeGenerationPath(kind, "check", id), null, {
+      "Client-Agent": "TibUI:2.0:viirtec"
+    })
+      .then(function (data) {
         var generation;
-        
+
         if (data.faulted) {
           throw new Error("Stable Horde reported that the job failed.");
         }
-        
-        if (data.done) {
 
+        if (data.done) {
           return requestJson(
             "GET",
             hordeGenerationPath(kind, "status", id),
@@ -1556,47 +1607,46 @@
             {
               "Client-Agent": "TibUI:2.0:viirtec"
             }
-          ).then(function(result) {
+          ).then(function (result) {
             if (result.faulted) {
               throw new Error("Stable Horde reported that the job failed.");
             }
-            
+
             clearActiveJob();
-            
+
             generation = result.generations && result.generations[0];
-            
+
             if (!generation) {
               throw new Error("Stable Horde finished without an output.");
             }
-            
+
             resolve(
-              kind === "text" ?
-              String(generation.text || "") :
-              String(generation.img || "")
+              kind === "text"
+                ? String(generation.text || "")
+                : String(generation.img || "")
             );
           });
         }
-        
+
         byId("request-status").textContent =
           "Stable Horde queue: " +
           Number(data.queue_position || 0) +
           " ahead · " +
           etaText(data.wait_time);
-        
+
         activeTimer = window.setTimeout(
-          function() {
+          function () {
             pollHordeJob(id, kind, resolve, reject);
           },
           state.maxCompatibility ? 3500 : 2500
         );
       })
-      .catch(function(error) {
+      .catch(function (error) {
         clearActiveJob();
         reject(error);
       });
   }
-  
-  
+
   function hordeRequest(kind, prompt, webContext, messages) {
     var isText = kind === "text";
     var body;
@@ -1646,17 +1696,17 @@
     return requestJson("POST", hordeGenerationPath(kind, "async", ""), body, {
       apikey: ANON_KEY,
       "Client-Agent": "TibUI:2.0:viirtec"
-    }).then(function(data) {
+    }).then(function (data) {
       if (!data.id) {
         throw new Error("Stable Horde did not accept the job.");
       }
       activeHordeJob = { id: data.id, kind: kind };
-      return new Promise(function(resolve, reject) {
+      return new Promise(function (resolve, reject) {
         pollHordeJob(data.id, kind, resolve, reject);
       });
     });
   }
-  
+
   function providerRequest(prompt, webContext, messages, provider) {
     var headers = {};
     provider = provider || state.provider;
@@ -1695,10 +1745,11 @@
       state.customModel,
       webContext,
       headers,
-      messages
+      messages,
+      state.customTemperature
     );
   }
-  
+
   function setSending(value) {
     sending = value;
     byId("conversation").setAttribute("aria-busy", value ? "true" : "false");
@@ -1714,8 +1765,10 @@
       refreshLiveHorde();
     }
   }
-  
+
   function abortActive() {
+    requestHistoryEnd = null;
+    window.TibUITools.cancelApproval();
     requestVersion += 1;
     var job = activeHordeJob;
     if (activeXhr) {
@@ -1730,24 +1783,25 @@
       requestJson(
         "DELETE",
         hordeGenerationPath(job.kind, "status", job.id),
-        null, { apikey: ANON_KEY, "Client-Agent": "TibUI:2.0:viirtec" }
-      ).catch(function() {});
+        null,
+        { apikey: ANON_KEY, "Client-Agent": "TibUI:2.0:viirtec" }
+      ).catch(function () {});
     }
     setSending(false);
     byId("request-status").textContent = "Request cancelled.";
   }
-  
+
   function auxiliaryRequest(prompt) {
     return providerRequest(
       prompt,
       "",
       [{ role: "user", content: prompt }],
-      state.provider === "hordeImage" ?
-      state.previousTextProvider || "chat" :
-      state.provider
+      state.provider === "hordeImage"
+        ? state.previousTextProvider || "chat"
+        : state.provider
     );
   }
-  
+
   function submitPrompt(event, existing) {
     var prompt;
     var chat;
@@ -1756,7 +1810,14 @@
     var sources = [];
     var context = "";
     var inspections = [];
-    
+    var regeneration =
+      existing && typeof existing === "object" ? existing.index : -1;
+    var userIndex =
+      regeneration >= 0 ? regeneration - 1 : activeChat().messages.length - 1;
+    while (userIndex >= 0 && activeChat().messages[userIndex].role !== "user") {
+      userIndex -= 1;
+    }
+
     event.preventDefault();
     if (sending) {
       abortActive();
@@ -1768,13 +1829,21 @@
       return;
     }
     syncStateFromInputs();
+    if (
+      state.provider === "hordeImage" &&
+      window.TibUITools.policy(window.TibUITools.imageControls) === "disabled"
+    ) {
+      byId("request-status").textContent =
+        "Image generation is disabled. Change its policy in the tools menu before sending.";
+      return;
+    }
     if (!existing && window.TibUIFiles.isReading()) {
       byId("request-status").textContent = "Wait for files to finish loading.";
       return;
     }
-    prompt = existing ?
-      activeChat().messages[activeChat().messages.length - 1].content :
-      byId("prompt-input").value.replace(/^\s+|\s+$/g, "");
+    prompt = existing
+      ? activeChat().messages[userIndex].content
+      : byId("prompt-input").value.replace(/^\s+|\s+$/g, "");
     if (!prompt) {
       return;
     }
@@ -1792,9 +1861,9 @@
       chat = activeChat();
     }
     var attachmentNames = existing ? [] : window.TibUIFiles.names();
-    var attachmentContext = existing ?
-      chat.messages[chat.messages.length - 1].attachmentContext || "" :
-      window.TibUIFiles.consume();
+    var attachmentContext = existing
+      ? chat.messages[userIndex].attachmentContext || ""
+      : window.TibUIFiles.consume();
     if (!existing) {
       chat.messages.push({
         role: "user",
@@ -1814,10 +1883,11 @@
     renderMessages();
     setSending(true);
     version = ++requestVersion;
-    window.TibUITools.run(prompt, function() {
-        return version !== requestVersion;
-      })
-      .then(function(data) {
+    requestHistoryEnd = regeneration >= 0 ? userIndex : null;
+    window.TibUITools.run(prompt, function () {
+      return version !== requestVersion;
+    })
+      .then(function (data) {
         if (version !== requestVersion) {
           throw new Error("Request cancelled.");
         }
@@ -1829,17 +1899,20 @@
           "Contacting " + providerLabel(state.provider) + "…";
         return providerRequest(
           (data.generationPrompt || prompt) +
-          (state.provider === "hordeImage" && attachmentContext ?
-            "\n\n" + attachmentContext :
-            ""),
+            (state.provider === "hordeImage" && attachmentContext
+              ? "\n\n" + attachmentContext
+              : ""),
           context
         );
       })
-      .then(function(content) {
+      .then(function (content) {
         if (version !== requestVersion) {
           throw new Error("Request cancelled.");
         }
-        chat.messages.push({
+        if (state.provider !== "hordeImage") {
+          content = window.TibUITools.cleanResponse(content, inspections);
+        }
+        var answer = {
           role: "assistant",
           content: content,
           kind: state.provider === "hordeImage" ? "image" : "text",
@@ -1847,53 +1920,65 @@
           label: providerLabel(state.provider),
           sources: sources,
           toolResults: inspections
-        });
-        
+        };
+        if (regeneration >= 0) {
+          window.TibUIWorkspace.recordVersion(chat, regeneration, answer);
+        } else {
+          chat.messages.push(answer);
+        }
+
         byId("request-status").textContent = warnings.join(" ");
-        
+
         saveState();
         renderMessages();
-        return window.TibUIWorkspace.title(chat, function() {
+        return window.TibUIWorkspace.title(chat, function () {
           return version !== requestVersion;
         });
       })
-      
-      .catch(function(error) {
+
+      .catch(function (error) {
         if (
           version === requestVersion &&
           error.message !== "Request cancelled."
         ) {
-          chat.messages.push({
+          var failure = {
             role: "assistant",
             content: error.message,
             error: true,
             toolResults: error.toolResults || inspections,
             label: providerLabel(state.provider)
-          });
-          
+          };
+          if (regeneration >= 0) {
+            window.TibUIWorkspace.recordVersion(chat, regeneration, failure);
+          } else {
+            chat.messages.push(failure);
+          }
+          saveState();
+
           byId("request-status").textContent = "";
-          
+
           renderMessages();
         }
       })
-      
-      .then(function() {
+
+      .then(function () {
         if (version !== requestVersion) {
           return;
         }
+        requestHistoryEnd = null;
         clearActiveJob();
         setSending(false);
         byId("prompt-input").focus();
       });
   }
-  
+
   function resizePrompt() {
     var input = byId("prompt-input");
     input.style.height = "38px";
     input.style.height = Math.min(170, input.scrollHeight) + "px";
     window.TibUIWorkspace.meter();
   }
-  
+
   function applyTheme() {
     var isDark;
     var themeColor = document.querySelector('meta[name="theme-color"]');
@@ -1909,14 +1994,14 @@
       "aria-label",
       isDark ? "Switch to light mode" : "Switch to dark mode"
     );
-    byId("theme-toggle").title = isDark ?
-      "Switch to light mode" :
-      "Switch to dark mode";
+    byId("theme-toggle").title = isDark
+      ? "Switch to light mode"
+      : "Switch to dark mode";
     if (themeColor) {
       themeColor.setAttribute("content", isDark ? "#171815" : "#f6f6f3");
     }
   }
-  
+
   function applyCompatibility() {
     setClass(document.body, "max-compat", state.maxCompatibility);
     setClass(document.body, "reduce-motion", state.reduceMotion);
@@ -1927,7 +2012,7 @@
     );
     setClass(document.body, "logos-hidden", !state.showModelLogos);
   }
-  
+
   function applyPreset(name) {
     state.compatPreset = name;
     if (name === "maximum") {
@@ -1956,7 +2041,7 @@
     applyCompatibility();
     saveState();
   }
-  
+
   function syncStateFromInputs() {
     state.theme = byId("theme").value;
     state.saveChats = byId("save-chats").checked;
@@ -2004,6 +2089,10 @@
       stripSlash(byId("custom-url").value) || "https://api.openai.com/v1";
     state.customModel =
       byId("custom-model").value.replace(/^\s+|\s+$/g, "") || "gpt-4o-mini";
+    state.customTemperature =
+      byId("custom-temperature").value.trim() === ""
+        ? null
+        : clampNumber(byId("custom-temperature").value, 0.8, 0, 2);
     state.webSearchEnabled = byId("web-search-enabled").checked;
     if (!state.webSearchEnabled) {
       state.webSearchToolActive = false;
@@ -2016,17 +2105,17 @@
       clampNumber(byId("web-search-results-count").value, 5, 1, 10)
     );
     state.wikipediaEnabled = byId("wikipedia-enabled").checked;
-    
+
     if (!state.wikipediaEnabled) {
       state.wikipediaToolActive = false;
     }
-    
+
     state.wikipediaLanguage = byId("wikipedia-language").value || "en";
-    
+
     state.wikipediaResultsCount = Math.round(
       clampNumber(byId("wikipedia-results-count").value, 3, 1, 5)
     );
-    
+
     state.compatPreset = byId("compat-preset").value;
     state.maxCompatibility = byId("max-compatibility").checked;
     state.reduceMotion = byId("reduce-motion").checked;
@@ -2042,7 +2131,7 @@
     applyTheme();
     applyCompatibility();
   }
-  
+
   function fillSettings() {
     byId("theme").value = state.theme;
     byId("save-chats").checked = state.saveChats;
@@ -2059,7 +2148,7 @@
     byId("horde-image-karras").checked = state.hordeImageKarras;
     byId("horde-image-seed").value = state.hordeImageSeed;
     window.TibUITools.imageControls.updateLabels();
-    
+
     byId("ollama-url").value = state.ollamaUrl;
     byId("ollama-model").value = state.ollamaModel;
     byId("ollama-temperature").value = state.ollamaTemperature;
@@ -2069,17 +2158,19 @@
     byId("ollama-keep-alive").value = state.ollamaKeepAlive;
     byId("custom-url").value = state.customUrl;
     byId("custom-model").value = state.customModel;
+    byId("custom-temperature").value =
+      state.customTemperature === null ? "" : state.customTemperature;
     byId("web-search-enabled").checked = state.webSearchEnabled;
     byId("web-search-mode").value = state.webSearchMode;
     byId("web-search-relay").value = state.webSearchRelay;
     byId("web-search-instances").value = state.webSearchInstances.join("\n");
     byId("web-search-results-count").value = state.webSearchResultsCount;
     byId("wikipedia-enabled").checked = state.wikipediaEnabled;
-    
+
     byId("wikipedia-language").value = state.wikipediaLanguage;
-    
+
     byId("wikipedia-results-count").value = state.wikipediaResultsCount;
-    
+
     byId("compat-preset").value = state.compatPreset;
     byId("max-compatibility").checked = state.maxCompatibility;
     byId("reduce-motion").checked = state.reduceMotion;
@@ -2089,25 +2180,25 @@
     byId("history-limit").value = state.historyLimit;
     window.TibUITools.updateUI();
   }
-  
+
   function updatePrivacy() {
     byId("privacy-label").innerHTML =
       "<span></span>" +
-      (state.saveChats ?
-        "Chats saved in a cookie" :
-        "Private session — not saved");
+      (state.saveChats
+        ? "Chats saved in a cookie"
+        : "Private session — not saved");
   }
-  
+
   function openMenu() {
     addClass(document.body, "menu-open");
     byId("menu-button").setAttribute("aria-expanded", "true");
   }
-  
+
   function closeMenu() {
     removeClass(document.body, "menu-open");
     byId("menu-button").setAttribute("aria-expanded", "false");
   }
-  
+
   function openSettings() {
     lastFocus = document.activeElement;
     fillSettings();
@@ -2116,7 +2207,7 @@
     closeMenu();
     byId("close-settings").focus();
   }
-  
+
   function closeSettings(save) {
     if (save) {
       syncStateFromInputs();
@@ -2128,7 +2219,7 @@
       lastFocus.focus();
     }
   }
-  
+
   function clearData() {
     state.chats = [];
     state.activeId = "";
@@ -2140,7 +2231,7 @@
     byId("settings-status").textContent =
       "Saved chats and cookie data cleared.";
   }
-  
+
   function trapModal(event) {
     var modal;
     var focusable;
@@ -2166,14 +2257,14 @@
       first.focus();
     }
   }
-  
+
   function updateViewport() {
     document.documentElement.style.setProperty(
       "--app-height",
       window.innerHeight + "px"
     );
   }
-  
+
   function bind() {
     byId("new-chat").onclick = newChat;
     byId("menu-button").onclick = openMenu;
@@ -2181,7 +2272,7 @@
     byId("scrim").onclick = closeMenu;
     byId("settings-button").onclick = openSettings;
     byId("settings-top").onclick = openSettings;
-    byId("theme-toggle").onclick = function() {
+    byId("theme-toggle").onclick = function () {
       var currentDark =
         state.theme === "dark" ||
         (state.theme === "system" &&
@@ -2191,28 +2282,28 @@
       applyTheme();
       saveState();
     };
-    byId("close-settings").onclick = function() {
+    byId("close-settings").onclick = function () {
       closeSettings(false);
     };
-    byId("done-settings").onclick = function() {
+    byId("done-settings").onclick = function () {
       closeSettings(true);
     };
-    byId("settings-modal").onclick = function(event) {
+    byId("settings-modal").onclick = function (event) {
       if (event.target === byId("settings-modal")) {
         closeSettings(true);
       }
     };
-    byId("provider").onchange = function() {
+    byId("provider").onchange = function () {
       window.TibUITools.manualProvider();
       updateProviderUI(true);
     };
     byId("model").onchange = onModelChange;
-    byId("auto-tools").onchange = function() {
+    byId("auto-tools").onchange = function () {
       byId("smart-tools").disabled = this.checked;
     };
     byId("prompt-form").onsubmit = submitPrompt;
     byId("prompt-input").oninput = resizePrompt;
-    byId("prompt-input").onkeydown = function(event) {
+    byId("prompt-input").onkeydown = function (event) {
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         byId("prompt-form").dispatchEvent(
@@ -2221,33 +2312,33 @@
       }
     };
     byId("load-pollinations").onclick = loadPollinationsModels;
-    byId("load-horde-text").onclick = function() {
+    byId("load-horde-text").onclick = function () {
       loadHordeModels("text", true);
     };
-    byId("load-horde-image").onclick = function() {
+    byId("load-horde-image").onclick = function () {
       loadHordeModels("image", true);
     };
     byId("load-ollama").onclick = loadOllamaModels;
     byId("clear-data").onclick = clearData;
-    byId("theme").onchange = function() {
+    byId("theme").onchange = function () {
       state.theme = this.value;
       applyTheme();
     };
-    byId("show-model-logos").onchange = function() {
+    byId("show-model-logos").onchange = function () {
       state.showModelLogos = this.checked;
       applyCompatibility();
     };
-    byId("compat-preset").onchange = function() {
+    byId("compat-preset").onchange = function () {
       applyPreset(this.value);
     };
-    byId("max-compatibility").onchange = function() {
+    byId("max-compatibility").onchange = function () {
       if (this.checked) {
         applyPreset("maximum");
       } else if (byId("compat-preset").value === "maximum") {
         applyPreset("balanced");
       }
     };
-    document.onkeydown = function(event) {
+    document.onkeydown = function (event) {
       if (event.key === "Escape") {
         if (!byId("settings-modal").hidden) {
           closeSettings(true);
@@ -2260,7 +2351,7 @@
     window.addEventListener("resize", updateViewport, false);
     window.addEventListener("orientationchange", updateViewport, false);
   }
-  
+
   function init() {
     window.TibUITools.prepare(state);
     loadState();
@@ -2274,33 +2365,33 @@
       state.activeId = state.chats[state.chats.length - 1].id;
     }
     updateViewport();
-    
+
     window.TibUITools.init({
       state: state,
       byId: byId,
       stripSlash: stripSlash,
       requestJson: requestJson,
-      cancelRequest: function() {
+      cancelRequest: function () {
         if (sending) {
           abortActive();
         }
       },
-      getConversation: function() {
+      getConversation: function () {
         return historyMessages("", true);
       },
       modelRequest: auxiliaryRequest,
-      requestText: function(url) {
+      requestText: function (url) {
         return requestJson("GET", url, null, null, true, 20);
       },
       saveState: saveState,
       setClass: setClass,
       syncStateFromInputs: syncStateFromInputs,
-      getImageModels: function() {
-        return window.TibUIHordeModels.load("image", true).then(function() {
+      getImageModels: function () {
+        return window.TibUIHordeModels.load("image", true).then(function () {
           return loadHordeModels("image", false);
         });
       },
-      selectImageModel: function(name) {
+      selectImageModel: function (name) {
         state.hordeImageModel = name;
         rebuildModelSelect();
         if (sending) {
@@ -2308,10 +2399,10 @@
         }
         saveState();
       },
-      refreshImageModels: function() {
+      refreshImageModels: function () {
         loadHordeModels("image");
       },
-      changeProvider: function(provider, preserveRequest) {
+      changeProvider: function (provider, preserveRequest) {
         if (sending && !preserveRequest) {
           abortActive();
         }
@@ -2327,15 +2418,15 @@
       byId: byId,
       saveState: saveState,
       makeId: makeId,
-      isSending: function() {
+      isSending: function () {
         return sending;
       },
-      refresh: function() {
+      refresh: function () {
         renderChats();
         renderMessages();
       }
     });
-    
+
     window.TibUIWorkspace.init({
       state: state,
       byId: byId,
@@ -2344,58 +2435,58 @@
       makeId: makeId,
       modelRequest: auxiliaryRequest,
       cancelAuxiliary: abortActive,
-      isSending: function() {
+      isSending: function () {
         return sending;
       },
-      cancel: function() {
+      cancel: function () {
         if (sending) {
           abortActive();
         }
       },
       renderChats: renderChats,
-      refresh: function() {
+      refresh: function () {
         renderChats();
         renderMessages();
       },
-      resend: function() {
-        submitPrompt({ preventDefault: function() {} }, true);
+      resend: function (request) {
+        submitPrompt({ preventDefault: function () {} }, request || true);
       },
-      models: function(provider) {
+      models: function (provider) {
         var values =
-          provider === "pollinations" ?
-          pollinationsModels.map(function(m) {
-            return m.name;
-          }) :
-          provider === "hordeText" ?
-          hordeTextModels.map(function(m) {
-            return m.name;
-          }) :
-          provider === "hordeImage" ?
-          hordeImageModels.map(function(m) {
-            return m.name;
-          }) :
-          provider === "ollama" ?
-          ollamaModels :
-          [];
+          provider === "pollinations"
+            ? pollinationsModels.map(function (m) {
+                return m.name;
+              })
+            : provider === "hordeText"
+              ? hordeTextModels.map(function (m) {
+                  return m.name;
+                })
+              : provider === "hordeImage"
+                ? hordeImageModels.map(function (m) {
+                    return m.name;
+                  })
+                : provider === "ollama"
+                  ? ollamaModels
+                  : [];
         var current =
-          provider === "pollinations" ?
-          state.pollinationsModel :
-          provider === "hordeText" ?
-          state.hordeTextModel :
-          provider === "hordeImage" ?
-          state.hordeImageModel :
-          provider === "ollama" ?
-          state.ollamaModel :
-          provider === "custom" ?
-          state.customModel :
-          "gpt-4o";
+          provider === "pollinations"
+            ? state.pollinationsModel
+            : provider === "hordeText"
+              ? state.hordeTextModel
+              : provider === "hordeImage"
+                ? state.hordeImageModel
+                : provider === "ollama"
+                  ? state.ollamaModel
+                  : provider === "custom"
+                    ? state.customModel
+                    : "gpt-4o";
         return [current].concat(
-          values.filter(function(name) {
+          values.filter(function (name) {
             return name !== current;
           })
         );
       },
-      chooseModel: function(provider, model) {
+      chooseModel: function (provider, model) {
         state.provider = provider;
         var keys = {
           pollinations: "pollinationsModel",
@@ -2413,9 +2504,42 @@
         saveState();
       }
     });
+    window.TibUIPresets.init({
+      state: state,
+      byId: byId,
+      getChat: activeChat,
+      makeId: makeId,
+      currentModel: currentModel,
+      saveState: saveState,
+      syncStateFromInputs: syncStateFromInputs,
+      isSending: function () {
+        return sending;
+      },
+      chooseModel: function (provider, model) {
+        state.provider = provider;
+        var keys = {
+          pollinations: "pollinationsModel",
+          hordeText: "hordeTextModel",
+          hordeImage: "hordeImageModel",
+          ollama: "ollamaModel",
+          custom: "customModel"
+        };
+        if (keys[provider] && model) {
+          state[keys[provider]] = model;
+        }
+        fillSettings();
+        byId("provider").value = provider;
+        updateProviderUI(false);
+      },
+      refreshSettings: function () {
+        fillSettings();
+        byId("provider").value = state.provider;
+        updateProviderUI(false);
+      }
+    });
     bind();
     fillSettings();
-    
+
     applyTheme();
     applyCompatibility();
     byId("provider").value = state.provider;
@@ -2433,6 +2557,6 @@
       loadHordeModels("image");
     }
   }
-  
+
   window.TibUITools.ready(init);
 })();

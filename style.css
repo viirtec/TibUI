@@ -2154,3 +2154,137 @@ summary {
     transform: none;
   }
 }
+
+#archive-filter {
+  width: 100%;
+  min-width: 0;
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel-soft);
+  color: var(--text);
+}
+.chat-item {
+  padding-right: 66px;
+  min-width: 0;
+}
+.archive-chat {
+  position: absolute;
+  top: 4px;
+  right: 33px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  opacity: 0;
+}
+.chat-entry:hover .archive-chat,
+.chat-entry:focus-within .archive-chat,
+.archive-chat:focus {
+  opacity: 1;
+}
+.archive-chat:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.response-versions {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: 6px;
+}
+.response-versions button {
+  font-size: 20px;
+  padding: 2px 8px;
+}
+.preset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0 -3px;
+}
+.preset-actions button {
+  margin: 3px;
+  font-size: 12px;
+  padding: 5px 8px;
+}
+.tools-menu {
+  width: 310px;
+  max-width: calc(100vw - 32px);
+}
+.tool-group {
+  border-top: 1px solid var(--line);
+  margin-top: 10px;
+  padding-top: 7px;
+}
+.tool-group h3 {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0 0 4px;
+}
+.tool-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.tool-row .tool-switch {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+}
+.tool-row .tool-switch span {
+  min-width: 0;
+  margin-right: 5px;
+  overflow-wrap: break-word;
+}
+.tool-policy {
+  flex: 0 0 102px;
+  width: 102px;
+  min-width: 0;
+  margin-left: 8px;
+  padding: 5px 3px;
+  font-size: 11px;
+  border: 1px solid var(--line);
+  background: var(--panel-soft);
+  color: var(--text);
+}
+.tool-approval {
+  width: 100%;
+  max-width: 760px;
+  margin: 6px auto;
+  padding: 10px;
+  max-height: 35vh;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  font-size: 12px;
+}
+.tool-approval label {
+  display: flex;
+  align-items: flex-start;
+  margin: 8px 0;
+}
+.tool-approval input {
+  margin: 3px 8px 0 0;
+  flex-shrink: 0;
+}
+.tool-approval span {
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+.tool-approval button {
+  margin: 3px;
+  font-size: 12px;
+}
+@media (hover: none) {
+  .archive-chat {
+    opacity: 1;
+  }
+}

@@ -231,6 +231,7 @@
 
   window.TibUITools.register("webSearch", {
     name: "Web search",
+    generalSearch: true,
     planningHint:
       "Generate up to three concise web search keyword queries preserving the question language, places and important dates.",
     activeKey: "webSearchToolActive",

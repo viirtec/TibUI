@@ -7,6 +7,7 @@
 !/app.js
 !/README.md
 !/chat-workspace.js
+!/chat-presets.js
 !/chat-files.js
 !/code-controls.js
 !/horde-models.js
@@ -15,7 +16,4 @@
 !/icons/*.svg
 !/tools/
 !/tools/*.js
-!/tools/math.js
-!/tools/translate.js
-!/tools
 /tests

@@ -1,6 +1,7 @@
-(function(window) {
+(function (window) {
   "use strict";
-  
+  var options;
+
   var categories = {
     length: {
       base: "m",
@@ -150,7 +151,7 @@
       }
     }
   };
-  
+
   var aliases = {
     millimeter: "mm",
     millimeters: "mm",
@@ -201,8 +202,8 @@
     teaspoons: "tsp",
     tablespoon: "tbsp",
     tablespoons: "tbsp",
-    "fluidounce": "floz",
-    "fluidounces": "floz",
+    fluidounce: "floz",
+    fluidounces: "floz",
     cup: "cup",
     cups: "cup",
     pint: "pt",
@@ -211,36 +212,36 @@
     quarts: "qt",
     gallon: "gal",
     gallons: "gal",
-    "squaremillimeter": "mm2",
-    "squaremillimeters": "mm2",
-    "squarecentimeter": "cm2",
-    "squarecentimeters": "cm2",
-    "squaremeter": "m2",
-    "squaremeters": "m2",
-    "squarekilometer": "km2",
-    "squarekilometers": "km2",
-    "squareinch": "in2",
-    "squareinches": "in2",
-    "squarefoot": "ft2",
-    "squarefeet": "ft2",
-    "squareyard": "yd2",
-    "squareyards": "yd2",
+    squaremillimeter: "mm2",
+    squaremillimeters: "mm2",
+    squarecentimeter: "cm2",
+    squarecentimeters: "cm2",
+    squaremeter: "m2",
+    squaremeters: "m2",
+    squarekilometer: "km2",
+    squarekilometers: "km2",
+    squareinch: "in2",
+    squareinches: "in2",
+    squarefoot: "ft2",
+    squarefeet: "ft2",
+    squareyard: "yd2",
+    squareyards: "yd2",
     acre: "acre",
     acres: "acre",
     hectare: "hectare",
     hectares: "hectare",
-    "squaremile": "mi2",
-    "squaremiles": "mi2",
-    "meterpersecond": "mps",
-    "meterspersecond": "mps",
-    "kilometerperhour": "kph",
-    "kilometersperhour": "kph",
-    "mileperhour": "mph",
-    "milesperhour": "mph",
+    squaremile: "mi2",
+    squaremiles: "mi2",
+    meterpersecond: "mps",
+    meterspersecond: "mps",
+    kilometerperhour: "kph",
+    kilometersperhour: "kph",
+    mileperhour: "mph",
+    milesperhour: "mph",
     knot: "knot",
     knots: "knot",
-    "footpersecond": "fps",
-    "feetpersecond": "fps",
+    footpersecond: "fps",
+    feetpersecond: "fps",
     millisecond: "ms",
     milliseconds: "ms",
     second: "s",
@@ -266,8 +267,8 @@
     atmosphere: "atm",
     atmospheres: "atm",
     psi: "psi",
-    "poundsquareinch": "psi",
-    "poundsquareinches": "psi",
+    poundsquareinch: "psi",
+    poundsquareinches: "psi",
     millimetermercury: "mmhg",
     joule: "j",
     joules: "j",
@@ -297,10 +298,10 @@
     radians: "rad",
     gradian: "grad",
     gradians: "grad",
-    "arcminute": "arcmin",
-    "arcminutes": "arcmin",
-    "arcsecond": "arcsec",
-    "arcseconds": "arcsec",
+    arcminute: "arcmin",
+    arcminutes: "arcmin",
+    arcsecond: "arcsec",
+    arcseconds: "arcsec",
     hertz: "hz",
     kilohertz: "khz",
     megahertz: "mhz",
@@ -332,13 +333,13 @@
     fahrenheit: "f",
     kelvin: "k"
   };
-  
+
   var temperature = {
     c: ["Celsius"],
     f: ["Fahrenheit"],
     k: ["Kelvin"]
   };
-  
+
   function normalizeUnit(value) {
     var key = String(value || "")
       .toLowerCase()
@@ -346,20 +347,20 @@
       .replace(/[\s_-]+/g, "");
     return aliases[key] || key;
   }
-  
+
   function normalizeText(value) {
     return String(value || "")
       .toLowerCase()
       .replace(/°/g, "")
       .replace(/[\s_-]+/g, "");
   }
-  
+
   function findUnit(unit) {
     var normalized = normalizeUnit(unit);
     if (temperature[normalized]) {
       return { category: "temperature", unit: normalized };
     }
-    
+
     for (var category in categories) {
       if (
         Object.prototype.hasOwnProperty.call(categories, category) &&
@@ -368,108 +369,113 @@
         return { category: category, unit: normalized };
       }
     }
-    
+
     return null;
   }
-  
+
   function parse(prompt) {
     var text = String(prompt || "").trim();
     var match = text.match(
       /^(?:convert\s+)?(-?(?:\d+(?:,\d{3})*|\d+)(?:\.\d+)?(?:e[+-]?\d+)?)\s*([a-zA-Zµμ²³0-9._-]+)\s+(?:to|into|in|as|=)\s+([a-zA-Zµμ²³0-9._-]+)$/i
     );
-    
+
     if (!match) {
       return null;
     }
-    
+
     var amount = Number(match[1].replace(/,/g, ""));
-    
+
     if (!isFinite(amount)) {
       return null;
     }
-    
+
     var from = findUnit(match[2]);
     var to = findUnit(match[3]);
-    
+
     if (!from || !to || from.category !== to.category) {
       return null;
     }
-    
+
     return {
       amount: amount,
       from: from,
       to: to
     };
   }
-  
+
   function convertTemperature(value, from, to) {
     var celsius;
-    
+
     if (from === "c") {
       celsius = value;
     } else if (from === "f") {
-      celsius = (value - 32) * 5 / 9;
+      celsius = ((value - 32) * 5) / 9;
     } else {
       celsius = value - 273.15;
     }
-    
+
     if (to === "c") {
       return celsius;
     }
-    
+
     if (to === "f") {
-      return celsius * 9 / 5 + 32;
+      return (celsius * 9) / 5 + 32;
     }
-    
+
     return celsius + 273.15;
   }
-  
+
   function convert(value, from, to) {
     if (from.category === "temperature") {
       return convertTemperature(value, from.unit, to.unit);
     }
-    
+
     var category = categories[from.category];
-    return value * category.units[from.unit][1] / category.units[to.unit][1];
+    return (value * category.units[from.unit][1]) / category.units[to.unit][1];
   }
-  
+
   function formatNumber(value) {
     if (!isFinite(value)) {
       return "undefined";
     }
-    
-    if (Math.abs(value) >= 1e12 || (Math.abs(value) > 0 && Math.abs(value) < 1e-9)) {
+
+    if (
+      Math.abs(value) >= 1e12 ||
+      (Math.abs(value) > 0 && Math.abs(value) < 1e-9)
+    ) {
       return value.toExponential(10).replace(/\.?0+e/, "e");
     }
-    
+
     return Number(value.toPrecision(12)).toString();
   }
-  
+
   function run(prompt) {
     var args = parse(prompt);
-    
+
     if (!args) {
       return Promise.reject(
         new Error(
-          "Use a conversion such as \"convert 10 km to mi\" or \"25 celsius to fahrenheit\"."
+          'Use a conversion such as "convert 10 km to mi" or "25 celsius to fahrenheit".'
         )
       );
     }
-    
+
     var value = convert(args.amount, args.from, args.to);
     var fromName =
-      args.from.category === "temperature" ?
-      temperature[args.from.unit][0] :
-      categories[args.from.category].units[args.from.unit][0];
+      args.from.category === "temperature"
+        ? temperature[args.from.unit][0]
+        : categories[args.from.category].units[args.from.unit][0];
     var toName =
-      args.to.category === "temperature" ?
-      temperature[args.to.unit][0] :
-      categories[args.to.category].units[args.to.unit][0];
-    
+      args.to.category === "temperature"
+        ? temperature[args.to.unit][0]
+        : categories[args.to.category].units[args.to.unit][0];
+
     if (!isFinite(value)) {
-      throw new Error("The conversion result is outside the supported numeric range.");
+      throw new Error(
+        "The conversion result is outside the supported numeric range."
+      );
     }
-    
+
     var content =
       formatNumber(args.amount) +
       " " +
@@ -479,40 +485,44 @@
       " " +
       toName +
       ".";
-    
+
     return Promise.resolve({
-      context: "Local unit conversion. No network request or external API was used.\n" +
+      context:
+        "Local unit conversion. No network request or external API was used.\n" +
         content,
       results: []
     });
   }
-  
+
   window.TibUITools.register("unit-converter", {
     name: "Unit Converter",
-    planningHint: 'Return one query in the exact form "convert VALUE UNIT to UNIT". Use the units and amount requested by the user. Do not invent values.',
+    planningHint:
+      'Return one query in the exact form "convert VALUE UNIT to UNIT". Use the units and amount requested by the user. Do not invent values.',
     activeKey: "unitConverterActive",
     contextTool: true,
     required: true,
-    init: function() {},
-    isActive: function() {
-      return !!window.TibUITools.options?.state?.unitConverterActive;
+    init: function (context) {
+      options = context;
+    },
+    isActive: function () {
+      return !!(options && options.state.unitConverterActive);
     },
     run: run,
-    formatContext: function(data) {
+    formatContext: function (data) {
       return data.context;
     },
-    validateQuery: function(query, original) {
+    validateQuery: function (query, original) {
       var args = parse(query);
       var requested = parse(original);
-      
+
       if (!args) {
         return false;
       }
-      
+
       if (!requested) {
         return true;
       }
-      
+
       return (
         args.amount === requested.amount &&
         args.from.category === requested.from.category &&

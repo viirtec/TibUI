@@ -7,6 +7,7 @@
   var automatic = [];
   var currentChat = null;
   var automaticImage = null;
+  var pendingApproval = null;
   var registry = (window.TibUITools = {});
 
   registry.register = function (id, tool) {
@@ -33,6 +34,43 @@
 
   registry.init = function (context) {
     options = context;
+    if (
+      !options.state.toolPolicies ||
+      typeof options.state.toolPolicies !== "object" ||
+      Array.isArray(options.state.toolPolicies)
+    ) {
+      options.state.toolPolicies = {};
+    }
+    var groups = {};
+    ["Search", "Everyday", "Developer", "Utilities", "Generate"].forEach(
+      function (name) {
+        var section = document.createElement("section");
+        section.className = "tool-group";
+        section.hidden = true;
+        var title = document.createElement("h3");
+        title.textContent = name;
+        section.appendChild(title);
+        groups[name] = section;
+        options.byId("tool-switches").appendChild(section);
+      }
+    );
+    var categories = {
+      webSearch: "Search",
+      news: "Search",
+      wikipedia: "Search",
+      research: "Search",
+      weather: "Everyday",
+      places: "Everyday",
+      recipes: "Everyday",
+      food: "Everyday",
+      translate: "Everyday",
+      shopping: "Everyday",
+      github: "Developer",
+      math: "Utilities",
+      currency: "Utilities",
+      "unit-converter": "Utilities",
+      imageControls: "Generate"
+    };
     entries.forEach(function (tool) {
       if (
         tool.activeKey &&
@@ -74,7 +112,61 @@
       };
       label.appendChild(text);
       label.appendChild(input);
-      options.byId("tool-switches").appendChild(label);
+      var row = document.createElement("div");
+      row.className = "tool-row";
+      row.appendChild(label);
+      var policySelect = document.createElement("select");
+      policySelect.className = "tool-policy";
+      policySelect.id = "policy-" + tool.id;
+      policySelect.setAttribute(
+        "aria-label",
+        tool.name + " automatic selection policy"
+      );
+      [
+        ["auto", "Auto"],
+        ["manual", "Manual only"],
+        ["ask", "Ask first"],
+        ["disabled", "Disabled"]
+      ].forEach(function (item) {
+        var option = document.createElement("option");
+        option.value = item[0];
+        option.textContent = item[1];
+        policySelect.appendChild(option);
+      });
+      policySelect.value = policy(tool);
+      policySelect.onchange = function () {
+        options.cancelRequest();
+        options.state.toolPolicies[tool.id] = this.value;
+        automatic = automatic.filter(function (id) {
+          return id !== tool.id;
+        });
+        if (automaticImage === tool.id) {
+          automaticImage = null;
+        }
+        if (this.value === "disabled") {
+          if (tool.setActive) {
+            tool.setActive(false);
+          } else {
+            options.state[tool.activeKey] = false;
+          }
+        }
+        registry.updateUI();
+        options.saveState();
+      };
+      row.appendChild(policySelect);
+      var groupName = tool.group || categories[tool.id] || "Utilities";
+      var group = groups[groupName];
+      if (!group) {
+        group = document.createElement("section");
+        group.className = "tool-group";
+        var heading = document.createElement("h3");
+        heading.textContent = groupName;
+        group.appendChild(heading);
+        groups[groupName] = group;
+        options.byId("tool-switches").appendChild(group);
+      }
+      group.hidden = false;
+      group.appendChild(row);
     });
     var button = options.byId("tools-button");
     var panel = options.byId("tools-menu");
@@ -161,7 +253,12 @@
         return;
       }
       var available = !tool.enabledKey || options.state[tool.enabledKey];
+      var policySelect = options.byId("policy-" + tool.id);
+      if (policySelect) {
+        policySelect.value = policy(tool);
+      }
       input.disabled =
+        policy(tool) === "disabled" ||
         !available ||
         (tool.contextTool && options.state.provider === "hordeImage");
       var active = manual(tool);
@@ -193,8 +290,14 @@
     options.setClass(options.byId("tools-button"), "active", count > 0);
   };
 
+  function policy(tool) {
+    var value = options.state.toolPolicies[tool.id];
+    return /^(auto|manual|ask|disabled)$/.test(value) ? value : "auto";
+  }
+
   function available(tool) {
     return (
+      policy(tool) !== "disabled" &&
       (!tool.enabledKey || options.state[tool.enabledKey]) &&
       (options.state.provider === "hordeImage"
         ? tool.generationTool && tool.isActive()
@@ -203,7 +306,10 @@
   }
 
   function manual(tool) {
-    return tool.isActive ? !!tool.isActive() : !!options.state[tool.activeKey];
+    return (
+      policy(tool) !== "disabled" &&
+      (tool.isActive ? !!tool.isActive() : !!options.state[tool.activeKey])
+    );
   }
 
   function conversation() {
@@ -329,12 +435,15 @@
                   return;
                 }
                 query = query.trim();
+                var validity = tool.validateQuery
+                  ? tool.validateQuery(query, prompt)
+                  : true;
                 if (
                   query &&
                   query.length <= 2000 &&
                   !/^https?:\/\//i.test(query) &&
                   queries.indexOf(query) < 0 &&
-                  (!tool.validateQuery || tool.validateQuery(query, prompt))
+                  (validity === true || (validity && validity.ok === true))
                 ) {
                   queries.push(query);
                 }
@@ -381,7 +490,10 @@
     registry.syncChat();
     automatic = [];
     var candidates = entries.filter(function (tool) {
-      return available(tool) && (manual(tool) || options.state.autoTools);
+      return (
+        available(tool) &&
+        (manual(tool) || (options.state.autoTools && policy(tool) !== "manual"))
+      );
     });
     var result = { context: "", sources: [], warnings: [], inspections: [] };
     registry.updateUI();
@@ -390,182 +502,314 @@
         var selected = candidates.filter(function (tool) {
           return manual(tool) || !!plans[tool.id];
         });
-        var image = selected.filter(function (tool) {
-          return tool.generationTool;
-        })[0];
-        if (image && plans[image.id] && !manual(image)) {
-          automaticImage = image.id;
-          image.setActive(true, true);
-        }
-        if (image && manual(image)) {
-          selected = [image];
-        }
-        selected.forEach(function (tool) {
-          if (!manual(tool) || automaticImage === tool.id) {
-            automatic.push(tool.id);
-          }
-        });
-        registry.updateUI();
-        var chain = Promise.resolve();
-        selected.forEach(function (tool) {
-          chain = chain.then(function () {
-            if (cancelled()) {
-              throw new Error("Request cancelled.");
+        if (
+          selected.some(function (tool) {
+            return tool.id === "shopping";
+          })
+        ) {
+          selected = selected.filter(function (tool) {
+            if (tool.generalSearch || tool.id === "webSearch") {
+              result.warnings.push(
+                "Shopping uses product catalog data; general web search was skipped for this message."
+              );
+              return false;
             }
-            if (tool.generationTool) {
-              result.generationPrompt = plans[tool.id]
-                ? plans[tool.id][0]
-                : prompt;
-              var generationStarted = Date.now();
-              return Promise.resolve(
-                tool.prepareGeneration
-                  ? tool.prepareGeneration(
-                      result.generationPrompt,
+            return true;
+          });
+        }
+        return approve(selected, plans, cancelled).then(function (approved) {
+          selected = approved;
+          var image = selected.filter(function (tool) {
+            return tool.generationTool;
+          })[0];
+          if (image && plans[image.id] && !manual(image)) {
+            automaticImage = image.id;
+            image.setActive(true, true);
+          }
+          if (image && manual(image)) {
+            selected = [image];
+          }
+          selected.forEach(function (tool) {
+            if (!manual(tool) || automaticImage === tool.id) {
+              automatic.push(tool.id);
+            }
+          });
+          registry.updateUI();
+          var chain = Promise.resolve();
+          selected.forEach(function (tool) {
+            chain = chain.then(function () {
+              if (cancelled()) {
+                throw new Error("Request cancelled.");
+              }
+              if (tool.generationTool) {
+                result.generationPrompt = plans[tool.id]
+                  ? plans[tool.id][0]
+                  : prompt;
+                var generationStarted = Date.now();
+                return Promise.resolve(
+                  tool.prepareGeneration
+                    ? tool.prepareGeneration(
+                        result.generationPrompt,
+                        cancelled,
+                        result,
+                        prompt
+                      )
+                    : undefined
+                ).then(function () {
+                  result.inspections.push({
+                    name: tool.name,
+                    query: result.generationPrompt,
+                    output:
+                      "Selected image model: " +
+                      options.state.hordeImageModel +
+                      "\nSize: " +
+                      options.state.hordeImageSize +
+                      "\nSteps: " +
+                      options.state.hordeImageSteps,
+                    sources: [],
+                    durationMs: Date.now() - generationStarted
+                  });
+                });
+              }
+              if (tool.shouldRun && !tool.shouldRun(prompt)) {
+                return;
+              }
+              var successes = 0;
+              var lastError;
+              function lookup(queries) {
+                var work = Promise.resolve();
+                queries.forEach(function (query) {
+                  work = work.then(function () {
+                    if (cancelled()) {
+                      throw new Error("Request cancelled.");
+                    }
+                    options.byId("request-status").textContent =
+                      "Using " + tool.name + "…";
+                    var inspection = {
+                      name: tool.name,
+                      query: query,
+                      output: "",
+                      sources: [],
+                      durationMs: 0
+                    };
+                    var started = Date.now();
+                    if (result.inspections.length < 20) {
+                      result.inspections.push(inspection);
+                    }
+                    return Promise.resolve()
+                      .then(function () {
+                        return tool.run(query, cancelled);
+                      })
+                      .then(function (data) {
+                        if (cancelled()) {
+                          throw new Error("Request cancelled.");
+                        }
+                        var context = tool.formatContext(data);
+                        inspection.output = String(context || "").substring(
+                          0,
+                          12000
+                        );
+                        inspection.durationMs = Date.now() - started;
+                        inspection.sources = (data.results || [])
+                          .slice(0, 30)
+                          .map(function (source) {
+                            return {
+                              title: String(source.title || "Source"),
+                              url: String(source.url || "")
+                            };
+                          });
+                        if (
+                          !context &&
+                          (!data.results || !data.results.length)
+                        ) {
+                          throw new Error("No useful results returned.");
+                        }
+                        successes += 1;
+                        if (context) {
+                          result.context = (
+                            result.context +
+                            (result.context ? "\n\n" : "") +
+                            context
+                          ).substring(0, 60000);
+                        }
+                        if (data.results) {
+                          data.results.forEach(function (source) {
+                            if (
+                              !result.sources.some(function (existing) {
+                                return existing.url === source.url;
+                              })
+                            ) {
+                              result.sources.push(source);
+                            }
+                          });
+                        }
+                      })
+                      .catch(function (error) {
+                        if (
+                          cancelled() ||
+                          error.message === "Request cancelled."
+                        ) {
+                          throw new Error("Request cancelled.");
+                        }
+                        inspection.output = error.message;
+                        inspection.durationMs = Date.now() - started;
+                        lastError = error;
+                      });
+                  });
+                });
+                return work;
+              }
+              return lookup(plans[tool.id] || [prompt])
+                .then(function () {
+                  if (!successes && lastError) {
+                    return planTools(
+                      [tool],
+                      prompt,
                       cancelled,
                       result,
-                      prompt
-                    )
-                  : undefined
-              ).then(function () {
-                result.inspections.push({
-                  name: tool.name,
-                  query: result.generationPrompt,
-                  output:
-                    "Selected image model: " +
-                    options.state.hordeImageModel +
-                    "\nSize: " +
-                    options.state.hordeImageSize +
-                    "\nSteps: " +
-                    options.state.hordeImageSteps,
-                  sources: [],
-                  durationMs: Date.now() - generationStarted
-                });
-              });
-            }
-            if (tool.shouldRun && !tool.shouldRun(prompt)) {
-              return;
-            }
-            var successes = 0;
-            var lastError;
-            function lookup(queries) {
-              var work = Promise.resolve();
-              queries.forEach(function (query) {
-                work = work.then(function () {
-                  if (cancelled()) {
-                    throw new Error("Request cancelled.");
-                  }
-                  options.byId("request-status").textContent =
-                    "Using " + tool.name + "…";
-                  var inspection = {
-                    name: tool.name,
-                    query: query,
-                    output: "",
-                    sources: [],
-                    durationMs: 0
-                  };
-                  var started = Date.now();
-                  if (result.inspections.length < 20) {
-                    result.inspections.push(inspection);
-                  }
-                  return Promise.resolve()
-                    .then(function () {
-                      return tool.run(query, cancelled);
-                    })
-                    .then(function (data) {
-                      if (cancelled()) {
-                        throw new Error("Request cancelled.");
-                      }
-                      var context = tool.formatContext(data);
-                      inspection.output = String(context || "").substring(
-                        0,
-                        12000
-                      );
-                      inspection.durationMs = Date.now() - started;
-                      inspection.sources = (data.results || [])
-                        .slice(0, 30)
-                        .map(function (source) {
-                          return {
-                            title: String(source.title || "Source"),
-                            url: String(source.url || "")
-                          };
-                        });
-                      if (!context && (!data.results || !data.results.length)) {
-                        throw new Error("No useful results returned.");
-                      }
-                      successes += 1;
-                      if (context) {
-                        result.context = (
-                          result.context +
-                          (result.context ? "\n\n" : "") +
-                          context
-                        ).substring(0, 60000);
-                      }
-                      if (data.results) {
-                        data.results.forEach(function (source) {
-                          if (
-                            !result.sources.some(function (existing) {
-                              return existing.url === source.url;
-                            })
-                          ) {
-                            result.sources.push(source);
-                          }
-                        });
-                      }
-                    })
-                    .catch(function (error) {
-                      if (
-                        cancelled() ||
-                        error.message === "Request cancelled."
-                      ) {
-                        throw new Error("Request cancelled.");
-                      }
-                      inspection.output = error.message;
-                      inspection.durationMs = Date.now() - started;
-                      lastError = error;
+                      lastError.message
+                    ).then(function (repair) {
+                      return repair[tool.id]
+                        ? lookup(repair[tool.id])
+                        : undefined;
                     });
-                });
-              });
-              return work;
-            }
-            return lookup(plans[tool.id] || [prompt])
-              .then(function () {
-                if (!successes && lastError) {
-                  return planTools(
-                    [tool],
-                    prompt,
-                    cancelled,
-                    result,
-                    lastError.message
-                  ).then(function (repair) {
-                    return repair[tool.id]
-                      ? lookup(repair[tool.id])
-                      : undefined;
-                  });
-                }
-              })
-              .then(function () {
-                if (!successes && lastError) {
-                  if (tool.required) {
-                    throw new Error(
-                      tool.name + " lookup failed: " + lastError.message
-                    );
                   }
-                  result.warnings.push(tool.name + ": " + lastError.message);
-                }
-              });
+                })
+                .then(function () {
+                  if (!successes && lastError) {
+                    if (tool.required) {
+                      throw new Error(
+                        tool.name + " lookup failed: " + lastError.message
+                      );
+                    }
+                    result.warnings.push(tool.name + ": " + lastError.message);
+                  }
+                });
+            });
           });
+          return chain
+            .then(function () {
+              return result;
+            })
+            .catch(function (error) {
+              error.toolResults = result.inspections;
+              throw error;
+            });
         });
-        return chain
-          .then(function () {
-            return result;
-          })
-          .catch(function (error) {
-            error.toolResults = result.inspections;
-            throw error;
-          });
       }
     );
   };
+
+  registry.cancelApproval = function () {
+    if (pendingApproval) {
+      pendingApproval(false, true);
+    }
+  };
+  registry.cleanResponse = function (content, records) {
+    entries.forEach(function (tool) {
+      if (
+        tool.cleanAnswer &&
+        records.some(function (record) {
+          return record.name === tool.name;
+        })
+      ) {
+        content = tool.cleanAnswer(content);
+      }
+    });
+    return content;
+  };
+  registry.list = function () {
+    return entries.slice();
+  };
+  registry.policy = policy;
+  registry.applySelection = function (selection, policies) {
+    registry.cancelApproval();
+    automatic = [];
+    automaticImage = null;
+    if (policies) {
+      options.state.toolPolicies = policies;
+    }
+    entries.forEach(function (tool) {
+      var enabled = !!selection[tool.id] && policy(tool) !== "disabled";
+      if (tool.setActive) {
+        tool.setActive(enabled);
+      } else {
+        options.state[tool.activeKey] = enabled;
+      }
+    });
+    registry.updateUI();
+  };
+  registry.selection = function () {
+    var result = {};
+    entries.forEach(function (tool) {
+      result[tool.id] = manual(tool);
+    });
+    return result;
+  };
+  function approve(selected, plans, cancelled) {
+    var asking = selected.filter(function (tool) {
+      return !manual(tool) && policy(tool) === "ask";
+    });
+    if (!asking.length) {
+      return Promise.resolve(selected);
+    }
+    var panel = options.byId("tool-approval");
+    var list = options.byId("tool-approval-list");
+    list.textContent = "";
+    asking.forEach(function (tool) {
+      var label = document.createElement("label");
+      var input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = true;
+      input.setAttribute("data-tool-id", tool.id);
+      label.appendChild(input);
+      var text = document.createElement("span");
+      text.textContent = tool.name + ": " + (plans[tool.id] || []).join("; ");
+      label.appendChild(text);
+      list.appendChild(label);
+    });
+    panel.hidden = false;
+    options.byId("request-status").textContent =
+      "Approve the proposed tool lookups, or skip them.";
+    return new Promise(function (resolve, reject) {
+      pendingApproval = function (run, abort) {
+        var accepted = [];
+        if (run) {
+          Array.prototype.forEach.call(
+            list.querySelectorAll("input"),
+            function (input) {
+              if (input.checked) {
+                accepted.push(input.getAttribute("data-tool-id"));
+              }
+            }
+          );
+        }
+        panel.hidden = true;
+        list.textContent = "";
+        pendingApproval = null;
+        if (abort || cancelled()) {
+          reject(new Error("Request cancelled."));
+          return;
+        }
+        resolve(
+          selected.filter(function (tool) {
+            return asking.indexOf(tool) < 0 || accepted.indexOf(tool.id) >= 0;
+          })
+        );
+      };
+      options.byId("approve-tools").onclick = function () {
+        if (pendingApproval) {
+          pendingApproval(true, false);
+        }
+      };
+      options.byId("skip-tools").onclick = function () {
+        if (pendingApproval) {
+          pendingApproval(false, false);
+        }
+      };
+      options.byId("approve-tools").focus();
+    });
+  }
 
   function load(index) {
     var files = window.TibUIToolFiles || [];

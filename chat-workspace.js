@@ -6,6 +6,7 @@
   var busy = false;
   var titlePending = false;
   var shownChat = "";
+  var archiveView = "active";
   function node(id) {
     return options.byId(id);
   }
@@ -149,6 +150,7 @@
     copy.id = options.makeId();
     copy.title = (current.title || "Chat").substring(0, 180) + " · branch";
     copy.titleGenerated = true;
+    copy.archived = false;
     copy.messages = copy.messages.slice(0, end + 1);
     var validCount = copy.messages.filter(function (m) {
       return m.kind !== "image" && !m.error;
@@ -172,6 +174,15 @@
         "Finish or cancel the current request first.";
       return;
     }
+    if (
+      typeof edited !== "string" &&
+      current.messages[index].versions &&
+      current.messages[index].versions.length >= 50
+    ) {
+      node("request-status").textContent =
+        "This answer has 50 versions. Branch to generate more without discarding existing versions.";
+      return;
+    }
     var lastUser = index;
     while (lastUser >= 0 && current.messages[lastUser].role !== "user") {
       lastUser -= 1;
@@ -179,15 +190,21 @@
     if (lastUser < 0) {
       return;
     }
-    var copy = branch(current, lastUser);
+    var copy;
     if (typeof edited === "string") {
+      copy = branch(current, lastUser);
       copy.messages[lastUser].content = edited;
+    } else {
+      if (current.id !== options.state.activeId) {
+        return;
+      }
+      copy = current;
     }
     if (provider) {
       options.chooseModel(provider, model);
     }
     options.refresh();
-    options.resend();
+    options.resend(typeof edited === "string" ? null : { index: index });
   }
   function editor(actions, current, index, modelMode) {
     var old = actions.parentNode.querySelector(".message-editor");
@@ -398,6 +415,10 @@
   window.TibUIWorkspace = {
     init: function (context) {
       options = context;
+      node("archive-filter").onchange = function () {
+        archiveView = this.value;
+        options.renderChats();
+      };
       node("chat-search").oninput = function () {
         search = this.value.toLowerCase();
         options.renderChats();
@@ -530,12 +551,18 @@
       };
     },
     startChat: function () {
+      archiveView = "active";
+      node("archive-filter").value = "active";
       search = "";
       node("chat-search").value = "";
       return folder;
     },
     matches: function (current) {
       return (
+        (archiveView === "all" ||
+          (archiveView === "archived"
+            ? current.archived === true
+            : !current.archived)) &&
         (!folder || current.folder === folder) &&
         (!search ||
           (
@@ -569,6 +596,29 @@
         branch(current, index);
       });
       var m = current.messages[index];
+      if (Array.isArray(m.versions) && m.versions.length > 1) {
+        var pager = document.createElement("span");
+        pager.className = "response-versions";
+        var selected = number(m.versionIndex + 1, 1, 1, m.versions.length) - 1;
+        var previous = button(pager, "‹", function () {
+          window.TibUIWorkspace.selectVersion(current, index, selected - 1);
+        });
+        previous.setAttribute("aria-label", "Previous response version");
+        previous.disabled = selected === 0;
+        var count = document.createElement("span");
+        count.textContent = String(selected + 1) + " / " + m.versions.length;
+        count.setAttribute(
+          "aria-label",
+          "Response version " + count.textContent
+        );
+        pager.appendChild(count);
+        var next = button(pager, "›", function () {
+          window.TibUIWorkspace.selectVersion(current, index, selected + 1);
+        });
+        next.setAttribute("aria-label", "Next response version");
+        next.disabled = selected === m.versions.length - 1;
+        actions.appendChild(pager);
+      }
       if (m.role === "user") {
         button(actions, "Edit", function () {
           editor(actions, current, index, false);
@@ -627,7 +677,96 @@
           titlePending = false;
         });
     },
+    recordVersion: function (current, index, answer) {
+      var message = current.messages[index];
+      if (!Array.isArray(message.versions)) {
+        var original = JSON.parse(JSON.stringify(message));
+        delete original.versions;
+        delete original.versionIndex;
+        message.versions = [original];
+      }
+      message.versions.push(answer);
+      window.TibUIWorkspace.selectVersion(
+        current,
+        index,
+        message.versions.length - 1,
+        true
+      );
+    },
+    selectVersion: function (current, index, selected, recording) {
+      if (!recording && (options.isSending() || busy || titlePending)) {
+        node("request-status").textContent =
+          "Finish or cancel the request before switching versions.";
+        return;
+      }
+      var message = current.messages[index];
+      if (
+        !message.versions ||
+        selected < 0 ||
+        selected >= message.versions.length
+      ) {
+        return;
+      }
+      var value = message.versions[selected];
+      [
+        "content",
+        "kind",
+        "alt",
+        "label",
+        "error",
+        "sources",
+        "toolResults"
+      ].forEach(function (key) {
+        if (typeof value[key] !== "undefined") {
+          message[key] = value[key];
+        } else {
+          delete message[key];
+        }
+      });
+      message.versionIndex = selected;
+      if (
+        current.summaryThrough &&
+        current.messages.slice(0, index + 1).filter(function (m) {
+          return m.kind !== "image" && !m.error;
+        }).length <= current.summaryThrough
+      ) {
+        delete current.summary;
+        delete current.summaryThrough;
+      }
+      options.saveState();
+      options.refresh();
+      if (!recording && index < current.messages.length - 1) {
+        node("request-status").textContent =
+          "Later messages are unchanged. Use Branch on this answer to continue a different conversation.";
+      }
+    },
+    archiveAction: function (parent, current) {
+      var action = button(parent, current.archived ? "↥" : "▣", function () {
+        if (current.id === options.state.activeId) {
+          options.cancel();
+        }
+        current.archived = !current.archived;
+        if (current.archived && current.id === options.state.activeId) {
+          var next = options.state.chats
+            .filter(function (item) {
+              return !item.archived;
+            })
+            .slice(-1)[0];
+          if (!next) {
+            next = { id: options.makeId(), title: "New chat", messages: [] };
+            options.state.chats.push(next);
+          }
+          options.state.activeId = next.id;
+        }
+        options.saveState();
+        options.refresh();
+      });
+      action.className = "archive-chat";
+      action.title = current.archived ? "Restore chat" : "Archive chat";
+      action.setAttribute("aria-label", action.title + " " + current.title);
+    },
     metadata: function (source, target) {
+      target.archived = source.archived === true;
       target.folder = String(source.folder || "").substring(0, 80);
       target.systemPrompt = String(source.systemPrompt || "").substring(
         0,

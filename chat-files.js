@@ -135,6 +135,112 @@
       );
     }
     var count = 0;
+    function cleanMessage(message, version) {
+      count += 1;
+      if (
+        count > 20000 ||
+        !message ||
+        !/^(user|assistant)$/.test(message.role) ||
+        typeof message.content !== "string" ||
+        message.content.length > 1000000
+      ) {
+        throw new Error("Invalid or oversized message in import.");
+      }
+      var image = message.kind === "image";
+      if (image && !safeUrl(message.content, true)) {
+        throw new Error("Unsupported image URL in import.");
+      }
+      var clean = {
+        role: message.role,
+        content: message.content,
+        kind: image ? "image" : "text",
+        error: message.error === true
+      };
+      if (Array.isArray(message.attachmentNames)) {
+        clean.attachmentNames = message.attachmentNames
+          .filter(function (name) {
+            return typeof name === "string";
+          })
+          .slice(0, 5)
+          .map(function (name) {
+            return name.substring(0, 255);
+          });
+      }
+      if (typeof message.attachmentContext === "string") {
+        if (message.attachmentContext.length > 110000) {
+          throw new Error("Oversized attachment in import.");
+        }
+        clean.attachmentContext = message.attachmentContext;
+      }
+      if (typeof message.label === "string") {
+        clean.label = message.label.substring(0, 200);
+      }
+      if (typeof message.alt === "string") {
+        clean.alt = message.alt.substring(0, 16000);
+      }
+      clean.sources = (Array.isArray(message.sources) ? message.sources : [])
+        .slice(0, 30)
+        .filter(function (source) {
+          return (
+            source &&
+            typeof source.title === "string" &&
+            safeUrl(source.url, false)
+          );
+        })
+        .map(function (source) {
+          return {
+            title: source.title.substring(0, 500),
+            url: source.url,
+            content: String(source.content || "").substring(0, 1800)
+          };
+        });
+      clean.toolResults = (
+        Array.isArray(message.toolResults) ? message.toolResults : []
+      )
+        .slice(0, 20)
+        .map(function (item) {
+          item = item || {};
+          return {
+            name: String(item.name || "Tool").substring(0, 100),
+            query: String(item.query || "").substring(0, 2000),
+            output: String(item.output || "").substring(0, 12000),
+            durationMs: Math.max(0, Number(item.durationMs) || 0),
+            sources: (Array.isArray(item.sources) ? item.sources : [])
+              .slice(0, 30)
+              .filter(function (source) {
+                return source && safeUrl(source.url, false);
+              })
+              .map(function (source) {
+                return {
+                  title: String(source.title || "Source").substring(0, 500),
+                  url: source.url
+                };
+              })
+          };
+        });
+      if (
+        !version &&
+        message.role === "assistant" &&
+        Array.isArray(message.versions)
+      ) {
+        clean.versions = message.versions.slice(0, 50).map(function (item) {
+          if (!item || item.role !== "assistant") {
+            throw new Error("Invalid response version.");
+          }
+          return cleanMessage(item, true);
+        });
+        if (clean.versions.length) {
+          clean.versionIndex = Math.max(
+            0,
+            Math.min(
+              clean.versions.length - 1,
+              Math.floor(Number(message.versionIndex) || 0)
+            )
+          );
+        }
+      }
+      return clean;
+    }
     return data.chats.map(function (chat) {
       if (
         !chat ||
@@ -147,91 +253,7 @@
         id: options.makeId(),
         title: chat.title.substring(0, 200),
         messages: chat.messages.map(function (message) {
-          count += 1;
-          if (
-            count > 20000 ||
-            !message ||
-            !/^(user|assistant)$/.test(message.role) ||
-            typeof message.content !== "string" ||
-            message.content.length > 1000000
-          ) {
-            throw new Error("Invalid or oversized message in import.");
-          }
-          var image = message.kind === "image";
-          if (image && !safeUrl(message.content, true)) {
-            throw new Error("Unsupported image URL in import.");
-          }
-          var clean = {
-            role: message.role,
-            content: message.content,
-            kind: image ? "image" : "text",
-            error: message.error === true
-          };
-          if (Array.isArray(message.attachmentNames)) {
-            clean.attachmentNames = message.attachmentNames
-              .filter(function (name) {
-                return typeof name === "string";
-              })
-              .slice(0, 5)
-              .map(function (name) {
-                return name.substring(0, 255);
-              });
-          }
-          if (typeof message.attachmentContext === "string") {
-            if (message.attachmentContext.length > 110000) {
-              throw new Error("Oversized attachment in import.");
-            }
-            clean.attachmentContext = message.attachmentContext;
-          }
-          if (typeof message.label === "string") {
-            clean.label = message.label.substring(0, 200);
-          }
-          if (typeof message.alt === "string") {
-            clean.alt = message.alt.substring(0, 16000);
-          }
-          clean.sources = (
-            Array.isArray(message.sources) ? message.sources : []
-          )
-            .slice(0, 30)
-            .filter(function (source) {
-              return (
-                source &&
-                typeof source.title === "string" &&
-                safeUrl(source.url, false)
-              );
-            })
-            .map(function (source) {
-              return {
-                title: source.title.substring(0, 500),
-                url: source.url,
-                content: String(source.content || "").substring(0, 1800)
-              };
-            });
-          clean.toolResults = (
-            Array.isArray(message.toolResults) ? message.toolResults : []
-          )
-            .slice(0, 20)
-            .map(function (item) {
-              item = item || {};
-              return {
-                name: String(item.name || "Tool").substring(0, 100),
-                query: String(item.query || "").substring(0, 2000),
-                output: String(item.output || "").substring(0, 12000),
-                durationMs: Math.max(0, Number(item.durationMs) || 0),
-                sources: (Array.isArray(item.sources) ? item.sources : [])
-                  .slice(0, 30)
-                  .filter(function (source) {
-                    return source && safeUrl(source.url, false);
-                  })
-                  .map(function (source) {
-                    return {
-                      title: String(source.title || "Source").substring(0, 500),
-                      url: source.url
-                    };
-                  })
-              };
-            });
-          return clean;
+          return cleanMessage(message, false);
         })
       });
     });

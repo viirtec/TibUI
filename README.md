@@ -14,6 +14,7 @@ TibUI is a small, self-hostable AI frontend made from static HTML, CSS, and Java
 - Optional AI tool selection using conversation context in Settings, off by default
 - Live Open-Meteo weather and seven-day forecasts without an API key
 - Wikipedia lookup in six languages
+- Local Math and Unit Converter tools, plus MyMemory translation through the shared planner
 - Keyless GitHub repository and issue search, repository filename lookup, and text-file reading
 - Experimental text attachments with filename previews and removal before sending (.txt, .json, .md, .csv, .log, .xml, .yaml, .yml)
 - Individual chat export and selective JSON chat import, including images, sources, and attached text
@@ -25,7 +26,11 @@ TibUI is a small, self-hostable AI frontend made from static HTML, CSS, and Java
 - Anonymous sessions by default, with opt-in cookie chat storage
 - Searchable chat history and named folders
 - AI-generated chat titles after the first answer, with manual renaming and an opt-out
-- Conversation branches, edit-and-resend, and regeneration with the current or another model
+- Response versions with previous/next controls, explicit conversation branches, edit-and-resend, and regeneration with another model
+- Archivable chats with restore controls and active/archive history filters
+- Favorite configuration presets, with built-in Coding, Research, Fast local, Deep research, and Estonian choices
+- Grouped tools and individual Auto, Manual only, Ask first, or Disabled policies
+- Multi-step shopping comparisons and alternatives using the keyless PriceLists.org product API
 - Per-chat system prompts and context controls in the right-hand Chat settings panel
 - Approximate context usage, recent messages, entire conversation, and older-message summaries
 - Large pasted text and supported clipboard files can be approved as attachments
@@ -49,9 +54,9 @@ Turn on **Image generation** to select Stable Horde images. Turning it off retur
 
 ## Conversations and context
 
-Use **Search chats** to search titles, message text, and attached filenames. Create folders in the history menu, assign the current chat under **Chat settings → Folder**, and filter history by folder. Rename and remove controls apply to the selected folder; removing a folder keeps its chats.
+Use **Search chats** to search titles, message text, and attached filenames. The archive control beside each chat moves it out of active history while retaining its messages. Choose **Archived chats** or **All chats** to find it and use Restore to return it to active history. Archived chats are included in JSON exports. Create folders in the history menu, assign the current chat under **Chat settings → Folder**, and filter history by folder. Rename and remove controls apply to the selected folder; removing a folder keeps its chats.
 
-Message actions appear beside Copy. **Branch** starts a separate chat containing messages through that point. **Edit → Resend** and **Regenerate** create a new branch and retain the original chat. **Other model** lets you choose a provider and model before regenerating; configured provider credentials and connection settings still apply. Pending composer text and attachments remain available when regenerating.
+Message actions appear beside Copy. **Branch** starts a separate chat containing messages through that point. **Edit → Resend** starts a branch for a changed prompt. **Regenerate** and **Other model** keep alternative answers as versions on the same assistant message, with `‹ 2 / 4 ›` controls; they do not add chats to the sidebar. Regenerating an earlier answer uses conversation context only through its original prompt. Later messages stay intact; use **Branch** on the chosen version to continue a divergent conversation. Up to 50 versions are retained per answer; branch to generate more without discarding existing versions. **Other model** lets you choose a provider and model before regenerating; configured provider credentials and connection settings still apply. Pending composer text and attachments remain available when regenerating.
 
 **Chat settings**, in the top bar, opens a right-hand panel for the current title, folder, extra system instructions, and context. AI titles are generated after the first successful answer; turn off **Automatic AI titles** to use the first message as the title. Titles and summaries use the chosen text provider, including the previous text provider when generating images. A failed title request keeps the initial title.
 
@@ -61,7 +66,23 @@ The composer estimates tokens as characters divided by four and warns at 85% of 
 
 Large pasted text prompts an attachment offer instead of filling the message box. Approve **Attach** to add `pasted-text.txt`, or cancel. Pasted supported text files use the same approval and size limits as file uploads. **Paste as text** is available when the content fits the composer.
 
-Chat JSON export/import preserves folders, per-chat instructions, context settings, summaries, attached text, and normalized tool inspection records. Cookie storage remains optional and size-limited; a summary that does not fit is omitted from the saved cookie and that saved chat uses recent messages. Use JSON exports to keep complete conversations.
+Chat JSON export/import preserves response versions, archive status, folders, per-chat instructions, context settings, summaries, attached text, and normalized tool inspection records. Cookie storage remains optional and size-limited; a summary that does not fit is omitted from the saved cookie and that saved chat uses recent messages. If response versions do not fit the cookie, the selected answer is kept while alternatives are omitted from that saved copy. Use JSON exports to keep complete conversations.
+
+## Configuration presets
+
+Under **Chat settings → Configuration preset**, apply **Coding**, **Research**, **Fast local**, **Deep research**, or **Estonian**, or use **Save current** to create your own. A custom preset captures provider/model, global and per-chat system prompts, manual tool selections, automatic-selection policies, Auto/Smart preferences, context mode and size, recent-message count, and supported generation settings. Ollama temperature and optional OpenAI-compatible temperature are included. Applying a preset changes the current chat's configuration without deleting messages or generating a summary automatically. Provider context limits still apply; the preset's estimate cannot enlarge a provider's actual context.
+
+Favorite presets appear first. Up to 20 custom presets can be saved, replaced by saving the same name, removed, exported as JSON, and imported without replacing existing presets. Built-in presets are reusable starting points; they do not contain credentials or promise particular model capacity. **Fast local** uses your configured Ollama model.
+
+Custom presets stay in memory by default. With **Save chats in a cookie** enabled, presets are also saved in local browser storage; disabling saving removes that stored preset copy. Presets never contain API keys, chat text, or conversation summaries. If storage is blocked, use **Export presets**. Import accepts only supported configuration fields. Applying a preset with a different custom API endpoint clears the in-memory key so it is not sent to the new endpoint.
+
+## Shopping
+
+**Shopping** uses the [PriceLists.org public Agent Commerce search API](https://pricelists.org/en/agent-docs), without a key, account registration, purchase, or general web/SearXNG search. The conversation-aware planner prepares product requirements, optional user-supplied shipping country and budget, and currency (EUR when unspecified). It searches in-stock offers using price and merchant-reputation rankings, then asks the model for up to two more specific or alternative product searches. The final model receives normalized offers and prepares the comparison. Each message makes at most three product searches, with matching searches reused for five minutes. When Shopping is selected, general web-search tools are skipped for that message even if enabled.
+
+Results focus on reported availability and its timestamp, price/currency, identifiers, merchant reputation, historical lows, and delivery information when available. Shipping and taxes are often unknown, and merchant reputation does not measure product quality. The model must distinguish these gaps and cannot invent offers or claim a globally best price.
+
+The filter retains direct HTTPS offers from an explicit list of established retailer/manufacturer domains. It rejects unknown retailers, marketplaces, explicit dropshipping flags, affiliate/redirect endpoints, unavailable offers, and offers above the supplied item-price budget. Tracking and affiliate query parameters and URL fragments are stripped from retained links and shopping answer URLs; product-identifying parameters such as SKU remain. Source links use `noreferrer`, and no remote shopping images are loaded. The API does not independently certify fulfillment, so this filter cannot guarantee that every retained retailer offer is free of dropshipping. Catalog coverage can be limited; when no eligible offers remain, TibUI reports that instead of substituting general web results or excluded listings.
 
 ## Food, recipes, places, and news
 
@@ -70,7 +91,7 @@ Enable these tools in **+**, or let Automatic tool selection choose them. Like t
 - **Food info** searches [Open Food Facts](https://openfoodfacts.github.io/openfoodfacts-server/api/) by product/brand or barcode. It supplies ingredients, declared allergens, nutrition per 100 g, Nutri-Score and NOVA values when present. Data is crowdsourced under ODbL and may be incomplete; missing allergen data does not imply allergen absence. Product lookups are temporarily reused for five minutes.
 - **Recipes** uses [TheMealDB](https://www.themealdb.com/docs_api_guide.php) public test key `1`, without signup or a private key. Search a dish, filter by one ingredient, request a specific meal ID, or ask for inspiration. Ingredient searches fetch full recipe details for up to three meals. Results include instructions, ingredient measurements, category, cuisine, and image/source links. TheMealDB recommends a supporter key for publicly shipped apps; key `1` is its public testing/personal-project access. Recipes are attributed to TheMealDB and temporarily reused for five minutes.
 - **Places** searches [OpenStreetMap via Overpass](https://wiki.openstreetmap.org/wiki/Overpass_API) around a named city or user-supplied coordinates, using Open-Meteo city lookup. It returns up to 20 mapped places within 100–10,000 meters, with source links, addresses, cuisine, coordinates, and opening hours when mapped. The tool tries a second documented public Overpass endpoint if the first request fails, with a 25-second timeout for each. Successful searches are reused for five minutes. No location permission is requested. OpenStreetMap contributors provide the data under ODbL; coverage and hours may be outdated.
-- **Latest news** uses [FreeNewsAPI.ai](https://freenewsapi.ai/docs), which documents no key, signup, or authentication header and supports browser CORS. Results are sorted by publication date and can be filtered by topic, language, country, and start date. Responses include publisher links, dates, and article summaries. Searches are temporarily reused for one minute. News coverage is incomplete and publisher claims are not independently verified.
+- **Latest news** uses [FreeNewsAPI.ai](https://freenewsapi.ai/docs), which documents no key, signup, or authentication header and supports browser CORS. The tool prepares a concise English topic query and requests English source articles sorted by publication date. Its model context preserves the original conversation language for the final answer. Responses include publisher links, dates, and article summaries. Searches are temporarily reused for one minute. News coverage is incomplete and publisher claims are not independently verified.
 
 ## Providers
 
@@ -94,11 +115,11 @@ python3 -m http.server 8080
 
 Open `http://localhost:8080`.
 
-Any static web server works. Upload `index.html`, `style.css`, `app.js`, `chat-files.js`, `code-controls.js`, `horde-models.js`, `chat-workspace.js`, `tools/`, and `icons/` together. No compilation is required.
+Any static web server works. Upload `index.html`, `style.css`, `app.js`, `chat-files.js`, `code-controls.js`, `horde-models.js`, `chat-workspace.js`, `chat-presets.js`, `tools/`, and `icons/` together. No compilation is required.
 
 ## Privacy and storage
 
-Chat saving is off by default. Without it, chat history exists only in the current page session. When enabled, TibUI stores a size-limited set of recent chats and preferences in a first-party cookie. API keys are kept only in memory and are never written to that cookie.
+Chat saving is off by default. Without it, chat history exists only in the current page session. When enabled, TibUI stores a size-limited set of recent chats and preferences in a first-party cookie. Custom presets use local browser storage only when saving is enabled. API keys are kept only in memory and are never written to cookies, stored presets, or preset exports.
 
 Messages and image prompts are sent directly from the browser to the selected provider. Web search queries are sent to the configured SearXNG route only when experimental web search is available in Settings and Web search is switched on in the + menu. Weather, Wikipedia, and GitHub queries go directly to their respective public APIs when selected. Attached text is sent to the selected provider with the message and retained in that chat for follow-up requests.
 
@@ -233,6 +254,17 @@ For example, `read paper DOI 10.1093/nar/gku1061` adds the accessible article bo
 
 ## Automatic tool selection
 
+The **+** menu groups tools under **Search**, **Everyday**, **Developer**, **Utilities**, and **Generate**. Scroll within the menu to reach lower groups. New tools can declare a `group` name; tools without one default to Utilities.
+
+Each tool has an individual policy:
+
+- **Auto** permits automatic selection when global Automatic tool selection is enabled, and also allows manual selection.
+- **Manual only** excludes the tool from automatic planning; its switch can still enable it explicitly.
+- **Ask first** lets the model propose the tool and its queries, then waits for approval for that message. Choose which proposed tools to run, skip them, or cancel the request. Manually enabling the tool already supplies permission and does not prompt again.
+- **Disabled** prevents both manual and automatic use until the policy is changed.
+
+Policies default to Auto to preserve existing behavior. Approvals do not carry over to future messages. Changing a policy cancels an active request; preset configurations can save these policies.
+
 Under **Settings → Chat & experimental search**, turn on **Automatic tool selection** if desired. It is off by default. The selected model receives recent conversation messages and the available tool catalog, then selects useful tools and prepares their input in one JSON planning request. There is no English keyword gate: Estonian questions, paraphrases and follow-ups are interpreted by the model. For example, after discussing Shiba Inu dogs, `How big are they?` can become a Wikipedia search for Shiba Inu height and weight.
 
 Automatic selection includes Smart tools automatically; its separate checkbox is disabled while automatic selection is on and restores its saved preference when automatic selection is turned off. Manual selections continue to apply. Optional automatic tools are limited to three per message and are shown with an “auto” chip rather than saved as manual switches. Greetings and requests that do not benefit from lookup can skip tools. Automatically selected tools appear as checked switches. Turn one off to clear its current selection. It remains available for the AI to select again on a later message when useful; switching it on explicitly enables it manually. Switching, starting or deleting chats clears automatic selections, and automatic image selection restores the previous text provider. Manually selected tools retain their existing behavior.
@@ -288,6 +320,7 @@ Add a file under `tools/`, register it, and regenerate the manifest. No changes 
   var options;
   window.TibUITools.register("example", {
     name: "Example",
+    group: "Utilities",
     planningHint: "Return concise topic keywords accepted by this search API.",
     activeKey: "exampleToolActive",
     contextTool: true,
@@ -327,7 +360,8 @@ style.css                  Responsive light and dark layouts
 app.js                     Providers, chats, and compatibility behavior
 chat-files.js              Text attachments and selective JSON chat transfer
 code-controls.js           Copy, download, and wrap for code blocks
-chat-workspace.js          Chat actions, folders, prompts, and context controls
+chat-workspace.js          Chat versions, archives, actions, folders, and context
+chat-presets.js            Reusable configurations and favorite presets
 horde-models.js            Temporary model-list cache and live model status
 tools/registry.js          Generic loader, switches, and execution pipeline
 tools/manifest.js          Discovered tool filenames
