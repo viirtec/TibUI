@@ -2288,3 +2288,22 @@ summary {
     opacity: 1;
   }
 }
+
+.message-chart {
+  margin: 12px 0;
+  max-width: 100%;
+}
+.message-chart img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+.message-chart figcaption {
+  margin-top: 6px;
+  overflow-wrap: break-word;
+}
+.chart-download {
+  display: inline-block;
+  margin-top: 6px;
+}

@@ -323,6 +323,13 @@
           <fieldset>
             <legend>Appearance</legend>
             <div class="field-line">
+              <label for="ui-language">Interface language</label>
+              <select id="ui-language">
+                <option value="en">English</option>
+                <option value="et">Eesti</option>
+              </select>
+            </div>
+            <div class="field-line">
               <label for="theme">Theme</label>
               <select id="theme">
                 <option value="system">System</option>
@@ -643,7 +650,7 @@
               ><span
                 ><strong>Smart tools</strong
                 ><small
-                  >Off by default. Expand manual tool lookups with multiple
+                  >On by default. Expand manual tool lookups with multiple
                   focused searches. Basic query preparation uses conversation
                   context even when off. Automatic selection includes this
                   feature; image prompts use the previous text provider.</small
@@ -944,6 +951,7 @@
         <pre id="summary-text"></pre>
       </details>
     </aside>
+    <script src="ui-language.js"></script>
     <script src="tools/manifest.js"></script>
     <script src="tools/registry.js"></script>
     <script src="chat-files.js"></script>

@@ -428,7 +428,7 @@
         options.renderChats();
       };
       node("new-folder").onclick = function () {
-        var name = window.prompt("Folder name");
+        var name = window.prompt(window.TibUII18n.text("Folder name"));
         if (!name || !name.trim()) {
           return;
         }
@@ -445,7 +445,10 @@
         if (!folder) {
           return;
         }
-        var name = window.prompt("Rename folder", folder);
+        var name = window.prompt(
+          window.TibUII18n.text("Rename folder"),
+          folder
+        );
         if (!name || !name.trim()) {
           return;
         }
@@ -715,7 +718,8 @@
         "label",
         "error",
         "sources",
-        "toolResults"
+        "toolResults",
+        "charts"
       ].forEach(function (key) {
         if (typeof value[key] !== "undefined") {
           message[key] = value[key];

@@ -298,7 +298,9 @@
         if (!allowed()) {
           return;
         }
-        var name = window.prompt("Save current configuration as preset");
+        var name = window.prompt(
+          window.TibUII18n.text("Save current configuration as preset")
+        );
         if (!name || !name.trim()) {
           return;
         }

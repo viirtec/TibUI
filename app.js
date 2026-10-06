@@ -12,7 +12,8 @@
     theme: "dark",
     saveChats: false,
     autoTools: false,
-    smartTools: false,
+    smartTools: true,
+    uiLanguage: "en",
     toolPolicies: {},
     presets: [],
     presetFavorites: [],
@@ -657,6 +658,7 @@
     box.className = "sources";
     title = document.createElement("strong");
     title.textContent = "Sources";
+    title.className = "ui-label";
 
     box.appendChild(title);
     for (i = 0; i < sources.length; i += 1) {
@@ -775,6 +777,34 @@
         files.textContent = "Files: " + message.attachmentNames.join(", ");
         bubble.appendChild(files);
       }
+      (message.charts || []).forEach(function (chart) {
+        if (
+          !/^data:image\/(?:png|gif|jpeg);base64,[A-Za-z0-9+/=]+$/.test(
+            chart.image || ""
+          ) ||
+          chart.image.length > 2800000
+        ) {
+          return;
+        }
+        var figure = document.createElement("figure");
+        figure.className = "message-chart";
+        var chartImage = document.createElement("img");
+        chartImage.src = chart.image;
+        chartImage.alt = chart.title || "Chart";
+        figure.appendChild(chartImage);
+        var caption = document.createElement("figcaption");
+        caption.textContent = chart.title || "Chart";
+        figure.appendChild(caption);
+        var download = document.createElement("a");
+        download.href = chart.image;
+        download.download = /^data:image\/gif/.test(chart.image)
+          ? "chart.gif"
+          : "chart.png";
+        download.textContent = "Download";
+        download.className = "chart-download";
+        figure.appendChild(download);
+        bubble.appendChild(figure);
+      });
       appendSources(bubble, message.sources);
       window.TibUIWorkspace.inspector(bubble, message.toolResults);
       var actions;
@@ -1810,6 +1840,7 @@
     var sources = [];
     var context = "";
     var inspections = [];
+    var charts = [];
     var regeneration =
       existing && typeof existing === "object" ? existing.index : -1;
     var userIndex =
@@ -1892,6 +1923,7 @@
           throw new Error("Request cancelled.");
         }
         inspections = data.inspections || [];
+        charts = data.charts || [];
         sources = data.sources;
         warnings = data.warnings;
         context = data.context;
@@ -1919,7 +1951,8 @@
           alt: state.provider === "hordeImage" ? prompt : "",
           label: providerLabel(state.provider),
           sources: sources,
-          toolResults: inspections
+          toolResults: inspections,
+          charts: charts
         };
         if (regeneration >= 0) {
           window.TibUIWorkspace.recordVersion(chat, regeneration, answer);
@@ -2043,6 +2076,8 @@
   }
 
   function syncStateFromInputs() {
+    state.uiLanguage = byId("ui-language").value === "et" ? "et" : "en";
+    window.TibUII18n.setLanguage(state.uiLanguage);
     state.theme = byId("theme").value;
     state.saveChats = byId("save-chats").checked;
     state.autoTools = byId("auto-tools").checked;
@@ -2133,6 +2168,8 @@
   }
 
   function fillSettings() {
+    byId("ui-language").value = state.uiLanguage === "et" ? "et" : "en";
+    window.TibUII18n.setLanguage(state.uiLanguage);
     byId("theme").value = state.theme;
     byId("save-chats").checked = state.saveChats;
     byId("auto-tools").checked = state.autoTools;
@@ -2539,6 +2576,11 @@
     });
     bind();
     fillSettings();
+    byId("ui-language").onchange = function () {
+      state.uiLanguage = this.value === "et" ? "et" : "en";
+      window.TibUII18n.setLanguage(state.uiLanguage);
+      saveState();
+    };
 
     applyTheme();
     applyCompatibility();

@@ -76,9 +76,23 @@ Favorite presets appear first. Up to 20 custom presets can be saved, replaced by
 
 Custom presets stay in memory by default. With **Save chats in a cookie** enabled, presets are also saved in local browser storage; disabling saving removes that stored preset copy. Presets never contain API keys, chat text, or conversation summaries. If storage is blocked, use **Export presets**. Import accepts only supported configuration fields. Applying a preset with a different custom API endpoint clears the in-memory key so it is not sent to the new endpoint.
 
+## Interface language
+
+English is the default. Choose **Settings → Appearance → Interface language → Eesti** for Estonian menus, controls and accessibility labels. Switching languages preserves messages, drafts, attachments and settings; it does not translate conversation content or force the assistant's response language. Language preferences persist only when optional browser saving is enabled.
+
+## Charts
+
+**+ → Generate → Charts** uses the [Image-Charts free API](https://documentation.image-charts.com/) through the shared conversation-aware Smart tools planner. Describe the chart, supply data, and specify labels, units, colors or appearance. The planner prepares the API configuration, the tool requests an image, and the assistant explains it. Ask for missing data rather than rely on invented measurements.
+
+The tool accepts full JSON-compatible [Chart.js 2.8.0 configurations](https://documentation.image-charts.com/chart-js/) (line, bar, horizontal bar, pie, doughnut, radar, polar area, scatter, bubble and mixed charts), including dataset and chart options. Its native API mode exposes chart types, data encodings and scaling, dimensions, colors and gradients, labels, axes, ranges, legends, grid lines, markers, line styling, margins, fonts, locale, rounded bars, animation, QR and Graphviz options. Options must be supported by the selected chart type. Executable functions, external assets and paid account/signature/retina features are excluded.
+
+Chart data is sent to Image-Charts using compact GET requests, with no account or key. The free service currently rejects POST requests, so the encoded chart URL is limited to 2,000 characters for compatibility. Large charts need shorter labels, compact native data encoding or fewer points; TibUI reports the limit instead of silently discarding data. Free images have a watermark and [a limit of 10 requests per minute per IP](https://documentation.image-charts.com/limits-and-quotas/). Ordinary charts return PNG; animations return GIF. Images up to 2 MB are shown inline, can be downloaded, and are included in chat JSON exports and response versions. Imports remain limited to 10 MB. Matching requests are reused in memory for five minutes; unavailable APIs and rate limits produce a visible warning rather than an invented chart. Browser CORS and the provider's availability are required.
+
 ## Shopping
 
-**Shopping** uses the [PriceLists.org public Agent Commerce search API](https://pricelists.org/en/agent-docs), without a key, account registration, purchase, or general web/SearXNG search. The conversation-aware planner prepares product requirements, optional user-supplied shipping country and budget, and currency (EUR when unspecified). It searches in-stock offers using price and merchant-reputation rankings, then asks the model for up to two more specific or alternative product searches. The final model receives normalized offers and prepares the comparison. Each message makes at most three product searches, with matching searches reused for five minutes. When Shopping is selected, general web-search tools are skipped for that message even if enabled.
+**Shopping** uses the [PriceLists.org public Agent Commerce search API](https://pricelists.org/en/agent-docs), without a key, account registration, purchase, or general web/SearXNG search. The conversation-aware planner prepares product requirements, optional user-supplied shipping country and budget, and currency (EUR when unspecified). It searches in-stock offers using price and merchant-reputation rankings, then asks the model for up to two more specific or alternative product searches. The final model receives normalized offers and prepares the comparison. Each message makes at most three distinct product queries against each catalog, with matching searches reused for five minutes. When Shopping is selected, general web-search tools are skipped for that message even if enabled.
+
+Shopping also queries the [OneFindMe public API](https://onefindme.com/openapi.json) using the same refined queries and optional shipping country. This API currently returns AliExpress marketplace listings with affiliate links. Those listings are excluded by TibUI's existing retailer and privacy policy, so OneFindMe currently adds no recommendable offers. Its links, images and tracking redirects are never opened. Provider failures leave usable results from the other catalog available. No general web-search service is used for shopping.
 
 Results focus on reported availability and its timestamp, price/currency, identifiers, merchant reputation, historical lows, and delivery information when available. Shipping and taxes are often unknown, and merchant reputation does not measure product quality. The model must distinguish these gaps and cannot invent offers or claim a globally best price.
 
@@ -115,7 +129,7 @@ python3 -m http.server 8080
 
 Open `http://localhost:8080`.
 
-Any static web server works. Upload `index.html`, `style.css`, `app.js`, `chat-files.js`, `code-controls.js`, `horde-models.js`, `chat-workspace.js`, `chat-presets.js`, `tools/`, and `icons/` together. No compilation is required.
+Any static web server works. Upload `index.html`, `style.css`, `app.js`, `chat-files.js`, `code-controls.js`, `horde-models.js`, `chat-workspace.js`, `chat-presets.js`, `ui-language.js`, `tools/`, and `icons/` together. No compilation is required.
 
 ## Privacy and storage
 
@@ -287,7 +301,7 @@ Safari versions without download-attribute support may open the JSON instead; sa
 
 ## Smart tools
 
-Enable **Settings → Chat & experimental search → Smart tools** to expand manual lookups with up to three focused queries per search tool. It is off by default. Basic input preparation for manually selected tools always uses the conversation, even with Smart tools off, so follow-up questions and natural phrasing can become valid tool inputs. Automatic selection includes Smart tools in its shared planning step.
+**Settings → Chat & experimental search → Smart tools** is on by default for new sessions and expands manual lookups with up to three focused queries per search tool. Existing saved preferences and explicit preset choices are respected. Basic input preparation for manually selected tools always uses the conversation, even with Smart tools off, so follow-up questions and natural phrasing can become valid tool inputs. Automatic selection includes Smart tools in its shared planning step.
 
 The planner receives recent user and assistant messages up to the configured history limit, bounded to 24 messages and 32,000 characters. Tool context is supplied with the latest user message for the final answer, rather than attached to earlier questions. Messages remain in the active chat without requiring cookies; opt-in storage and JSON export/import still control persistence across sessions. Starting a new chat starts new conversation context.
 
@@ -350,6 +364,8 @@ Add a file under `tools/`, register it, and regenerate the manifest. No changes 
 
 `planningHint` is optional tool-local guidance for Smart tools; without it the registry asks for concise search keywords. The AI selects available tools using their name and guidance, without a keyword matcher. The shared planner returns `{ "tools": { "example": { "queries": ["topic keywords"] } } }`, validates and deduplicates queries, and executes each through `run(query, cancelled)` without changes to `app.js`. Mark a tool `required: true` when it needs one exact operation and failure must stop the request. `generationTool: true` tools receive one refined generation prompt.
 
+`resultDependent: true` runs a tool after other lookups and prepares its input again using their collected context, as Charts does. `maxQueryLength` can allow larger structured inputs within the shared bounded planner. Optional `charts` rows contain validated base64 PNG/GIF/JPEG `image` data and a `title` for inline display, response versions and JSON transfer.
+
 `run` returns a Promise; optional `results` rows contain `title`, `url`, and `content` for source display. Optional `shouldRun(prompt)` filters execution, `enabledKey` connects a Settings availability preference, `required` makes a lookup failure stop the request, and `setActive(value)` handles special switches such as image generation. Shared helpers include state, DOM lookup, request handling, and saving. An optional `validateQuery(query, original)` validates prepared inputs. Tool context is untrusted reference material and should be labeled accordingly. Keep tool code and APIs compatible with older Safari.
 
 ## Project structure
@@ -361,6 +377,7 @@ app.js                     Providers, chats, and compatibility behavior
 chat-files.js              Text attachments and selective JSON chat transfer
 code-controls.js           Copy, download, and wrap for code blocks
 chat-workspace.js          Chat versions, archives, actions, folders, and context
+ui-language.js            English and Estonian interface translations
 chat-presets.js            Reusable configurations and favorite presets
 horde-models.js            Temporary model-list cache and live model status
 tools/registry.js          Generic loader, switches, and execution pipeline

@@ -1,4 +1,5 @@
 window.TibUIToolFiles = [
+  "charts.js",
   "currency.js",
   "food.js",
   "github.js",

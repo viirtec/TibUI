@@ -194,6 +194,24 @@
             content: String(source.content || "").substring(0, 1800)
           };
         });
+      clean.charts = (Array.isArray(message.charts) ? message.charts : [])
+        .slice(0, 3)
+        .filter(function (chart) {
+          return (
+            chart &&
+            typeof chart.image === "string" &&
+            chart.image.length <= 2800000 &&
+            /^data:image\/(?:png|gif|jpeg);base64,[A-Za-z0-9+/=]+$/.test(
+              chart.image
+            )
+          );
+        })
+        .map(function (chart) {
+          return {
+            image: chart.image,
+            title: String(chart.title || "Chart").substring(0, 200)
+          };
+        });
       clean.toolResults = (
         Array.isArray(message.toolResults) ? message.toolResults : []
       )
